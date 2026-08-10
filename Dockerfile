@@ -84,6 +84,16 @@ COPY --from=documentserver /var/www/onlyoffice/documentserver/web-apps      ./v$
 RUN cp "./v${DS_VERSION}-${HASH}/web-apps/apps/api/documents/api.js.tpl" \
        "./v${DS_VERSION}-${HASH}/web-apps/apps/api/documents/api.js"
 
+# Community DocumentServer ships dormant Google Analytics loaders inside some
+# editor bundles. The site CSP already blocks them; rewrite the hostnames to
+# the reserved .invalid TLD as an additional fail-closed privacy safeguard.
+RUN analytics_files="$(grep -RIlE 'googletagmanager\.com|google-analytics\.com' \
+      "./v${DS_VERSION}-${HASH}" || true)" && \
+    if [ -n "$analytics_files" ]; then \
+      printf '%s\n' "$analytics_files" | \
+        xargs sed -i -E 's/(googletagmanager|google-analytics)\.com/analytics.invalid/g'; \
+    fi
+
 # Fail closed if the generated site or editor resources still reference the
 # previous operator or other explicitly forbidden third-party services.
 RUN matches="$(grep -RIlE 'office-editor\.ziziyi\.com|office-plugins\.ziziyi\.com|googletagmanager\.com|google-analytics\.com|api\.producthunt\.com|chromewebstore\.google\.com' /srv || true)" && \
