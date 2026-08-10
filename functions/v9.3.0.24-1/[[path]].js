@@ -1,4 +1,3 @@
-const EDITOR_PATH_PREFIX = "/v9.3.0.24-1/";
 const EDITOR_UPSTREAM_ORIGIN = "https://office-editor.ziziyi.com";
 
 const copyRequestHeaders = (request) => {
@@ -56,27 +55,24 @@ const proxyEditorAsset = async (request) => {
   });
 };
 
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const localResponse = await env.ASSETS.fetch(request);
+export const onRequest = async (context) => {
+  const { request } = context;
+  const localResponse = await context.next();
 
-    if (
-      localResponse.status !== 404 ||
-      !url.pathname.startsWith(EDITOR_PATH_PREFIX) ||
-      (request.method !== "GET" && request.method !== "HEAD")
-    ) {
-      return localResponse;
-    }
+  if (
+    localResponse.status !== 404 ||
+    (request.method !== "GET" && request.method !== "HEAD")
+  ) {
+    return localResponse;
+  }
 
-    try {
-      return await proxyEditorAsset(request);
-    } catch (error) {
-      console.error("ONLYOFFICE asset proxy failed", url.pathname, error);
-      return new Response("Office editor asset is temporarily unavailable.", {
-        status: 502,
-        headers: { "content-type": "text/plain; charset=utf-8" },
-      });
-    }
-  },
+  try {
+    return await proxyEditorAsset(request);
+  } catch (error) {
+    console.error("ONLYOFFICE asset proxy failed", new URL(request.url).pathname, error);
+    return new Response("Office editor asset is temporarily unavailable.", {
+      status: 502,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  }
 };
