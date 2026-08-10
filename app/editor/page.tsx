@@ -89,6 +89,7 @@ export default function Page() {
 
     let editor: DocEditor | null = null;
     let saveInProgress = false;
+    let userInteracted = false;
 
     const postBridgeMessage = (
       type: string,
@@ -147,6 +148,16 @@ export default function Page() {
       if (!iframeDoc || !win) {
         throw new Error("Iframe not loaded");
       }
+
+      const markUserInteraction = () => {
+        userInteracted = true;
+      };
+      iframeDoc.addEventListener("pointerdown", markUserInteraction, {
+        capture: true,
+        passive: true,
+      });
+      iframeDoc.addEventListener("keydown", markUserInteraction, true);
+      iframeDoc.addEventListener("beforeinput", markUserInteraction, true);
 
       const xhr = createXHRProxy(win.XMLHttpRequest);
       const fetchProxy = createFetchProxy(win);
@@ -236,6 +247,7 @@ export default function Page() {
           onDocumentStateChange: (e: { data: boolean; target: unknown }) => {
             console.log("Document state change", e);
             if (e.data) {
+              if (bridgeEnabled && !userInteracted) return;
               isDirty.current = true;
               postBridgeMessage(BRIDGE_DIRTY, { dirty: true });
             }
