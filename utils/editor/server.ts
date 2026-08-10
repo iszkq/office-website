@@ -7,7 +7,9 @@ import {
   DownloadHandler,
 } from "./types";
 import { emptyDocx, emptyPdf, emptyPptx, emptyXlsx } from "./empty";
-import { getDocumentType, getFileExt } from "./utils";
+import { APP_ROOT, getDocumentType, getFileExt } from "./utils";
+
+const EDITOR_BUILD_VERSION = APP_ROOT.includes("/v9.4.") ? "9.4.0" : "9.3.0";
 
 function mergeBuffers(buffers: Uint8Array[]) {
   const totalLength = buffers.reduce((acc, buffer) => acc + buffer.length, 0);
@@ -40,7 +42,7 @@ export class EditorServer {
     name: "Me",
   };
   private client = {
-    buildVersion: "9.4.0",
+    buildVersion: EDITOR_BUILD_VERSION,
     buildNumber: 8,
   };
   private participants: Participant[] = [];
@@ -304,7 +306,7 @@ export class EditorServer {
           //   changes: changes,
           //   changesIndex: 0,
           indexUser: 1,
-          buildVersion: client.buildVersion || "9.4.0",
+          buildVersion: client.buildVersion || EDITOR_BUILD_VERSION,
           buildNumber: client.buildNumber || 9,
           licenseType: 3,
           editorType: 2,

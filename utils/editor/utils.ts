@@ -77,6 +77,10 @@ export function getNewUrl(type: string) {
   return `/editor?new=${type}`;
 }
 
-export const APP_ROOT = process.env.NEXT_PUBLIC_APP_ROOT || "/v9.4.0.1-1";
+// Cloudflare Pages cannot contain the complete 9.4 editor asset tree. Keep the
+// existing same-origin compatibility route there until the Docker deployment
+// is connected. The Docker build sets NEXT_PUBLIC_APP_ROOT to its bundled 9.4
+// assets, so the self-hosted image never uses this fallback.
+export const APP_ROOT = process.env.NEXT_PUBLIC_APP_ROOT || "/v9.3.0.24-1";
 export const PRELOAD_HTML = "/web-apps/apps/api/documents/preload.html";
 export const API_JS = "/web-apps/apps/api/documents/api.js";

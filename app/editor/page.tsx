@@ -127,26 +127,6 @@ export default function Page() {
       } catch (error) {
         console.warn("Failed to reset the public Office modified state", error);
       }
-
-      try {
-        const frame = document.querySelector<HTMLIFrameElement>(
-          'iframe[name="frameEditor"]'
-        );
-        const frameWindow = frame?.contentWindow as
-          | (Window & {
-              Asc?: {
-                editor?: {
-                  asc_onSaveCallback?: (result: { err_code: number }) => void;
-                };
-              };
-            })
-          | null;
-        frameWindow?.Asc?.editor?.asc_onSaveCallback?.({ err_code: 0 });
-      } catch (error) {
-        // Older editor builds occasionally need this internal completion
-        // callback. It is best-effort and must never prevent the public reset.
-        console.warn("Failed to complete the legacy Office save callback", error);
-      }
     };
 
     server.setDownloadHandler(({ data, fileName, fileType }) => {
