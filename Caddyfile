@@ -1,6 +1,11 @@
 :80 {
     root * /srv
 
+    # ONLYOFFICE ships several large JavaScript bundles. Compress text assets
+    # at the origin so the lightweight public reverse proxy only forwards the
+    # smaller response body.
+    encode zstd gzip
+
     # The editor receives decrypted documents in the browser. Keep every
     # executable and network request on this origin so third-party code cannot
     # observe or exfiltrate document content.
@@ -32,6 +37,13 @@
         path /v*-*/*
     }
     header @onlyoffice_versioned Cache-Control "public, max-age=31556952, immutable"
+
+    # Next.js filenames are content-hashed as well and are safe to keep across
+    # editor opens. This avoids downloading the bridge application repeatedly.
+    @next_static {
+        path /_next/static/*
+    }
+    header @next_static Cache-Control "public, max-age=31556952, immutable"
 
     # Brotli-encoded x2t wasm
     @x2t_wasm {
