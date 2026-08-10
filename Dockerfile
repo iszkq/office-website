@@ -28,6 +28,15 @@ FROM onlyoffice/documentserver:${DS_VERSION} AS documentserver
 # wait branch) so the files exist before the COPY in the final stage.
 RUN documentserver-generate-allfonts.sh false
 
+# The editor preload registers this worker from the versioned asset root.  It
+# lives alongside the DocumentServer static tree (not under web-apps), so copy
+# it explicitly into the same versioned root that the website exposes.  Without
+# this file the browser logs a 404 on every open and loses the editor's cache
+# warm-up path.
+RUN service_worker="$(find /var/www/onlyoffice/documentserver -type f -name document_editor_service_worker.js -print -quit)" && \
+    test -n "$service_worker" && \
+    cp "$service_worker" /tmp/document_editor_service_worker.js
+
 # ============================================================
 # Stage 2: Next.js website builder
 # ============================================================
@@ -79,6 +88,7 @@ COPY --from=builder /app/out ./
 COPY --from=documentserver /var/www/onlyoffice/documentserver/fonts         ./v${DS_VERSION}-${HASH}/fonts
 COPY --from=documentserver /var/www/onlyoffice/documentserver/sdkjs         ./v${DS_VERSION}-${HASH}/sdkjs
 COPY --from=documentserver /var/www/onlyoffice/documentserver/web-apps      ./v${DS_VERSION}-${HASH}/web-apps
+COPY --from=documentserver /tmp/document_editor_service_worker.js            ./v${DS_VERSION}-${HASH}/document_editor_service_worker.js
 # api.js is generated from a template at runtime in a full DocumentServer
 # deployment, but here we serve it statically — copy the template as-is.
 RUN cp "./v${DS_VERSION}-${HASH}/web-apps/apps/api/documents/api.js.tpl" \
