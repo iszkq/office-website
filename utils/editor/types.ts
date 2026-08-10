@@ -215,3 +215,11 @@ export type PluginMode = "featured" | "all" | "none";
 export interface ServerOptions {
   getState?: () => { plugins: PluginMode };
 }
+
+export type DownloadOutput = {
+  data: ArrayBuffer;
+  fileName: string;
+  fileType: string;
+};
+
+export type DownloadHandler = (output: DownloadOutput) => boolean;

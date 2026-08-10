@@ -1,6 +1,12 @@
 import { converter } from "./x2t";
 import { MockSocket } from "./socket";
-import { User, Participant, AscSaveTypes, ServerOptions } from "./types";
+import {
+  User,
+  Participant,
+  AscSaveTypes,
+  ServerOptions,
+  DownloadHandler,
+} from "./types";
 import { emptyDocx, emptyPdf, emptyPptx, emptyXlsx } from "./empty";
 import { getDocumentType, getFileExt } from "./utils";
 import { allPlugins, featuredPlugins, getPluginsData } from "./plugins";
@@ -53,6 +59,7 @@ export class EditorServer {
   private downloadParts: Uint8Array[] = [];
 
   private options: ServerOptions = {};
+  private downloadHandler: DownloadHandler | null = null;
 
   constructor(options: ServerOptions = {}) {
     this.options = options;
@@ -63,7 +70,7 @@ export class EditorServer {
 
   async open(
     file: File,
-    { fileType, fileName }: { fileType?: string; fileName?: string } = {},
+    { fileType, fileName }: { fileType?: string; fileName?: string } = {}
   ) {
     const title = fileName || file.name;
     this.fileType = fileType || getFileExt(file.name) || "docx";
@@ -127,9 +134,10 @@ export class EditorServer {
       fileType?: string;
       fileName?: string;
       loader?: (url: string) => Promise<ArrayBuffer>;
-    } = {},
+    } = {}
   ) {
-    const title = fileName || decodeURIComponent(url.split("/").pop() || "Document")
+    const title =
+      fileName || decodeURIComponent(url.split("/").pop() || "Document");
     this.fileType = fileType || getFileExt(title) || "docx";
     const documentType = getDocumentType(this.fileType);
     this.id = randomId();
@@ -161,7 +169,7 @@ export class EditorServer {
 
   private async loadDocument(
     buffer: ArrayBuffer | (() => Promise<ArrayBuffer>),
-    fileType: string,
+    fileType: string
   ) {
     if (typeof buffer == "function") {
       buffer = await buffer();
@@ -209,6 +217,10 @@ export class EditorServer {
       ...this.client,
       ...info,
     };
+  }
+
+  setDownloadHandler(handler: DownloadHandler | null) {
+    this.downloadHandler = handler;
   }
 
   handleConnect({ socket }: { socket: MockSocket }) {
@@ -423,13 +435,28 @@ export class EditorServer {
           // TODO: error message
           return { status: "error" };
         }
-        const blob = new Blob([new Uint8Array(output)]);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = cmd.title || "test.docx";
-        a.click();
-        URL.revokeObjectURL(url);
+        const fileName = cmd.title || this.title || "document.docx";
+        const fileType = getFileExt(fileName) || this.fileType;
+        const outputBuffer = output.buffer.slice(
+          output.byteOffset,
+          output.byteOffset + output.byteLength
+        );
+        const handled =
+          this.downloadHandler?.({
+            data: outputBuffer,
+            fileName,
+            fileType,
+          }) === true;
+
+        if (!handled) {
+          const blob = new Blob([new Uint8Array(output)]);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
 
         return { status: "ok" };
       };

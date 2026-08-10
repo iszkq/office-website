@@ -15,6 +15,25 @@ import { DocEditor } from "@/utils/editor/types";
 import { createExtensionLoader } from "@/utils/extension";
 import InstallExtensionDialog from "@/components/install-extension-dialog";
 
+const BRIDGE_READY = "xinghuo-office-ready";
+const BRIDGE_OPEN = "xinghuo-office-open";
+const BRIDGE_OPENED = "xinghuo-office-opened";
+const BRIDGE_DIRTY = "xinghuo-office-dirty";
+const BRIDGE_SAVE = "xinghuo-office-save";
+const BRIDGE_SAVING = "xinghuo-office-saving";
+const BRIDGE_SAVED = "xinghuo-office-saved";
+const BRIDGE_ERROR = "xinghuo-office-error";
+
+const MIME_TYPES: Record<string, string> = {
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  pdf: "application/pdf",
+};
+
 export default function Page() {
   const server = useAppStore((state) => state.server);
   const language = useResolvedLanguage();
@@ -49,19 +68,79 @@ export default function Page() {
     const paramEditing = searchParams.get("editing");
     const paramLang = searchParams.get("lang");
     const paramTheme = searchParams.get("theme");
+    const embedded = searchParams.get("embed") === "1";
+    const requestId = searchParams.get("requestId");
+    const requestedParentOrigin = searchParams.get("parentOrigin");
+
+    let parentOrigin: string | null = null;
+    if (embedded && requestedParentOrigin && requestId) {
+      try {
+        const parsedOrigin = new URL(requestedParentOrigin).origin;
+        if (parsedOrigin === requestedParentOrigin) parentOrigin = parsedOrigin;
+      } catch {
+        parentOrigin = null;
+      }
+    }
+    const bridgeEnabled = Boolean(parentOrigin && requestId);
 
     const editing = paramEditing === null ? true : paramEditing !== "0";
     const lang = paramLang || language;
     const uiTheme = paramTheme || theme;
 
     let editor: DocEditor | null = null;
+    let saveInProgress = false;
+
+    const postBridgeMessage = (
+      type: string,
+      payload: Record<string, unknown> = {},
+      transfer: Transferable[] = []
+    ) => {
+      if (!bridgeEnabled || !parentOrigin || !requestId) return;
+      window.parent.postMessage(
+        { type, requestId, ...payload },
+        parentOrigin,
+        transfer
+      );
+    };
+
+    const requestExport = () => {
+      if (!bridgeEnabled || !editor || saveInProgress) return;
+      saveInProgress = true;
+      postBridgeMessage(BRIDGE_SAVING);
+      try {
+        editor.downloadAs(server.getDocument().fileType);
+      } catch (error) {
+        saveInProgress = false;
+        console.error("Failed to save embedded document", error);
+        postBridgeMessage(BRIDGE_ERROR, {
+          message: "Failed to generate the updated document",
+        });
+      }
+    };
+
+    server.setDownloadHandler(({ data, fileName, fileType }) => {
+      if (!bridgeEnabled || !saveInProgress) return false;
+      saveInProgress = false;
+      isDirty.current = false;
+      postBridgeMessage(
+        BRIDGE_SAVED,
+        {
+          buffer: data,
+          fileName,
+          mimeType:
+            MIME_TYPES[fileType.toLowerCase()] || "application/octet-stream",
+        },
+        [data]
+      );
+      return true;
+    });
 
     MockSocket.on("connect", server.handleConnect);
     MockSocket.on("disconnect", server.handleDisconnect);
 
     const onAppReady = () => {
       const iframe = document.querySelector<HTMLIFrameElement>(
-        'iframe[name="frameEditor"]',
+        'iframe[name="frameEditor"]'
       );
       const win = iframe?.contentWindow as typeof window;
       const iframeDoc = iframe?.contentDocument;
@@ -87,7 +166,7 @@ export default function Page() {
           const u = new URL(url, location.origin);
           return new _Worker(
             u.href.replace(u.origin, location.origin),
-            options,
+            options
           );
         },
       });
@@ -152,11 +231,13 @@ export default function Page() {
           },
           onDocumentReady: (e: unknown) => {
             console.log("Document ready", e);
+            postBridgeMessage(BRIDGE_OPENED);
           },
           onDocumentStateChange: (e: { data: boolean; target: unknown }) => {
             console.log("Document state change", e);
             if (e.data) {
               isDirty.current = true;
+              postBridgeMessage(BRIDGE_DIRTY, { dirty: true });
             }
           },
           onRequestOpen: (e: unknown) => {
@@ -176,18 +257,30 @@ export default function Page() {
           },
           onSaveDocument: (e: unknown) => {
             console.log("onSaveDocument", e);
-            isDirty.current = false;
+            if (bridgeEnabled && isDirty.current) {
+              requestExport();
+            } else if (!bridgeEnabled) {
+              isDirty.current = false;
+            }
           },
           onDownloadAs: (e: unknown) => {
             console.log("onDownloadAs", e);
           },
           onSave: (e: unknown) => {
             console.log("onSave", e);
-            isDirty.current = false;
+            if (bridgeEnabled && isDirty.current) {
+              requestExport();
+            } else if (!bridgeEnabled) {
+              isDirty.current = false;
+            }
           },
           writeFile: async (e: unknown) => {
             console.log("writeFile", e);
-            isDirty.current = false;
+            if (bridgeEnabled && isDirty.current) {
+              requestExport();
+            } else if (!bridgeEnabled) {
+              isDirty.current = false;
+            }
           },
         },
         type: "desktop",
@@ -206,7 +299,7 @@ export default function Page() {
         return;
       }
       let script = document.querySelector<HTMLScriptElement>(
-        `script[src="${apiUrl}"]`,
+        `script[src="${apiUrl}"]`
       );
       if (!script) {
         script = document.createElement("script");
@@ -221,9 +314,57 @@ export default function Page() {
       };
     };
 
+    const handleBridgeMessage = async (event: MessageEvent) => {
+      if (
+        !bridgeEnabled ||
+        event.source !== window.parent ||
+        event.origin !== parentOrigin ||
+        event.data?.requestId !== requestId
+      ) {
+        return;
+      }
+
+      if (event.data.type === BRIDGE_OPEN) {
+        const { buffer, fileName, fileType, mimeType } = event.data;
+        if (!(buffer instanceof ArrayBuffer) || typeof fileName !== "string") {
+          postBridgeMessage(BRIDGE_ERROR, { message: "Invalid document data" });
+          return;
+        }
+        try {
+          await server.open(
+            new File([buffer], fileName, {
+              type:
+                typeof mimeType === "string"
+                  ? mimeType
+                  : "application/octet-stream",
+            }),
+            {
+              fileType: typeof fileType === "string" ? fileType : undefined,
+              fileName,
+            }
+          );
+          loadEditor();
+        } catch (error) {
+          console.error("Failed to open embedded document", error);
+          postBridgeMessage(BRIDGE_ERROR, {
+            message: "Failed to open the document",
+          });
+        }
+        return;
+      }
+
+      if (event.data.type === BRIDGE_SAVE) requestExport();
+    };
+
+    window.addEventListener("message", handleBridgeMessage);
+
     const init = async () => {
+      if (bridgeEnabled) {
+        postBridgeMessage(BRIDGE_READY);
+        return;
+      }
       if (newDoc) {
-        server.openNew(newDoc)
+        server.openNew(newDoc);
       }
       if (fileUrl && !fileId) {
         const { loader, tryDirect } = createExtensionLoader({
@@ -232,17 +373,19 @@ export default function Page() {
         });
         tryDirectRef.current = tryDirect;
         server.openUrl(fileUrl, {
-          fileType: searchParams.get("fileType") || '',
-          fileName: searchParams.get("fileName") || '',
+          fileType: searchParams.get("fileType") || "",
+          fileName: searchParams.get("fileName") || "",
           loader,
-        })
+        });
       }
-      loadEditor()
-    }
+      loadEditor();
+    };
 
-    init()
+    init();
 
     return () => {
+      window.removeEventListener("message", handleBridgeMessage);
+      server.setDownloadHandler(null);
       MockSocket.off("connect", server.handleConnect);
       MockSocket.off("disconnect", server.handleDisconnect);
       editor?.destroyEditor?.();
@@ -252,21 +395,21 @@ export default function Page() {
 
   return (
     <>
-    <InstallExtensionDialog
-      open={showInstallHint}
-      onClose={() => setShowInstallHint(false)}
-      onTryDirect={tryDirectRef.current || undefined}
-    />
-    <div>
-      <div className="w-screen h-screen">
-        <div id="placeholder">
-          <iframe
-            className="w-0 h-0 hidden"
-            src={APP_ROOT + PRELOAD_HTML}
-          ></iframe>
+      <InstallExtensionDialog
+        open={showInstallHint}
+        onClose={() => setShowInstallHint(false)}
+        onTryDirect={tryDirectRef.current || undefined}
+      />
+      <div>
+        <div className="w-screen h-screen">
+          <div id="placeholder">
+            <iframe
+              className="w-0 h-0 hidden"
+              src={APP_ROOT + PRELOAD_HTML}
+            ></iframe>
+          </div>
         </div>
       </div>
-    </div>
     </>
   );
 }
