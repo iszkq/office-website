@@ -20,13 +20,13 @@ export const metadata: Metadata = {
     "ZIZIYI Office",
   ],
   alternates: {
-    canonical: "https://office.ziziyi.com",
+    canonical: "https://office.221819.best",
   },
   openGraph: {
     title: "Free Online Office Editor — Word, Excel, PowerPoint | ZIZIYI",
     description:
       "Edit Office documents in your browser for free. No upload, no login — fully private.",
-    url: "https://office.ziziyi.com",
+    url: "https://office.221819.best",
     type: "website",
   },
   twitter: {

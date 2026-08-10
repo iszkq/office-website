@@ -1,4 +1,4 @@
-import { Locale } from "@ziziyi/utils";
+import { Locale } from "@/utils/locale";
 
 export const timeZones: Record<string, string> = {
   [Locale.ZH_CN]: "Asia/Shanghai",

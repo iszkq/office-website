@@ -4,12 +4,10 @@ import {
   User,
   Participant,
   AscSaveTypes,
-  ServerOptions,
   DownloadHandler,
 } from "./types";
 import { emptyDocx, emptyPdf, emptyPptx, emptyXlsx } from "./empty";
 import { getDocumentType, getFileExt } from "./utils";
-import { allPlugins, featuredPlugins, getPluginsData } from "./plugins";
 
 function mergeBuffers(buffers: Uint8Array[]) {
   const totalLength = buffers.reduce((acc, buffer) => acc + buffer.length, 0);
@@ -42,7 +40,7 @@ export class EditorServer {
     name: "Me",
   };
   private client = {
-    buildVersion: "9.3.0",
+    buildVersion: "9.4.0",
     buildNumber: 8,
   };
   private participants: Participant[] = [];
@@ -58,11 +56,9 @@ export class EditorServer {
   private downloadId: string = "";
   private downloadParts: Uint8Array[] = [];
 
-  private options: ServerOptions = {};
   private downloadHandler: DownloadHandler | null = null;
 
-  constructor(options: ServerOptions = {}) {
-    this.options = options;
+  constructor() {
     this.send = this.send.bind(this);
     this.handleConnect = this.handleConnect.bind(this);
     this.handleMessage = this.handleMessage.bind(this);
@@ -308,7 +304,7 @@ export class EditorServer {
           //   changes: changes,
           //   changesIndex: 0,
           indexUser: 1,
-          buildVersion: client.buildVersion || "9.3.0",
+          buildVersion: client.buildVersion || "9.4.0",
           buildNumber: client.buildNumber || 9,
           licenseType: 3,
           editorType: 2,
@@ -516,14 +512,7 @@ export class EditorServer {
     }
 
     if (u.pathname == "/plugins.json") {
-      const state = this.options.getState?.();
-      if (state?.plugins == "none") {
-        return Response.json({ url: "", pluginsData: [], autostart: [] });
-      }
-      if (state?.plugins == "all") {
-        return Response.json(getPluginsData(allPlugins));
-      }
-      return Response.json(getPluginsData(featuredPlugins));
+      return Response.json({ url: "", pluginsData: [], autostart: [] });
     }
 
     return null;

@@ -3,7 +3,7 @@
 import { NextIntlClientProvider, AbstractIntlMessages } from "next-intl";
 import { useEffect, useState, ReactNode } from "react";
 import { useResolvedLanguage } from "@/store";
-import { Locale } from "@ziziyi/utils";
+import { Locale } from "@/utils/locale";
 import { getTimeZone } from "@/i18n/config";
 
 // Cache for loaded messages

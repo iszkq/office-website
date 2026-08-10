@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useExtracted } from "next-intl";
 import { Header } from "@/components/main/header";
 import { Sidebar } from "@/components/main/sidebar";
 import { DragDropOverlay } from "@/components/drag-drop-overlay";
@@ -10,7 +9,6 @@ import { useAppStore } from "@/store";
 import { addRecentFile } from "@/utils/recent-files";
 import { cn } from "@/lib/utils";
 import { MobileNav } from "@/components/main/mobile-nav";
-import { ExtensionPrompt } from "@/components/extension-prompt";
 import { isDarkTheme } from "@/utils/utils";
 import { APP_ROOT, PRELOAD_HTML } from "@/utils/editor/utils";
 
@@ -21,7 +19,6 @@ export default function MainLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const t = useExtracted();
   const { server, theme } = useAppStore();
   const preloadRef = useRef<HTMLDivElement>(null);
 
@@ -88,9 +85,6 @@ export default function MainLayout({
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
         <MobileNav pathname={pathname} />
       </div>
-
-      {/* First-visit extension install prompt */}
-      <ExtensionPrompt />
 
       {/* Global Drag and Drop Overlay */}
       <DragDropOverlay

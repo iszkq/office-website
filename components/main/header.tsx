@@ -5,7 +5,6 @@ import {
   Sheet,
   Presentation,
   FileType2,
-  Files,
 } from "lucide-react";
 import Image from "next/image";
 import { PropsWithChildren } from "react";

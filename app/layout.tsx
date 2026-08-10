@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import { GoogleAnalytics } from '@next/third-parties/google'
 import { getMessages } from "next-intl/server";
 import { I18nProvider } from "@/components/i18n-provider";
 import { ProgressProvider } from "@/components/progress-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://office.ziziyi.com"),
+  metadataBase: new URL("https://office.221819.best"),
   title: {
     default: "ZIZIYI Office — Free Online Word, Excel & PowerPoint Editor",
     template: "%s",
@@ -74,7 +73,7 @@ export default async function RootLayout({
     "@context": "https://schema.org",
     "@type": "WebApplication",
     name: "ZIZIYI Office",
-    url: "https://office.ziziyi.com",
+    url: "https://office.221819.best",
     description:
       "Open, view, and edit Word, Excel, and PowerPoint documents directly in your browser. No upload, no server — your files stay private.",
     applicationCategory: "BusinessApplication",
@@ -89,7 +88,7 @@ export default async function RootLayout({
       "No file upload required",
       "Privacy-first — files stay local",
       "Free templates",
-      "Browser extension for drag & drop",
+      "Local browser document editing",
     ],
   };
 
@@ -107,7 +106,6 @@ export default async function RootLayout({
           <I18nProvider initialMessages={messages}>{children}</I18nProvider>
         </ProgressProvider>
       </body>
-      <GoogleAnalytics gaId="G-EFLBPT6TS8" />
     </html>
   );
 }

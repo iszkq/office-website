@@ -5,15 +5,14 @@
 #   ./build.sh [DS_VERSION] [HASH] [extra docker build args...]
 #
 # Examples:
-#   ./build.sh                        # defaults: DS_VERSION=9.3.1, HASH=1
-#   ./build.sh 9.3.1 2                  # bump HASH to bust asset cache
-#   ./build.sh 9.3.0 1                  # upgrade to a new DocumentServer version
-#   ./build.sh 9.3.1 1 --no-cache
-#   ./build.sh 9.3.1 1 --push --tag my-registry/office-website:latest
+#   ./build.sh                        # defaults: DS_VERSION=9.4.0.1, HASH=1
+#   ./build.sh 9.4.0.1 2             # bump HASH to bust asset cache
+#   ./build.sh 9.4.0.1 1 --no-cache
+#   ./build.sh 9.4.0.1 1 --push --tag my-registry/office-website:latest
 
 set -euo pipefail
 
-DS_VERSION="${1:-9.3.1}"
+DS_VERSION="${1:-9.4.0.1}"
 HASH="${2:-1}"
 shift 2 2>/dev/null || true   # remaining args forwarded to docker build
 

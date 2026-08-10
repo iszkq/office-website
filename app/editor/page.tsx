@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useEffect, useState } from "react";
+import { useLayoutEffect, useRef, useEffect } from "react";
 import { useAppStore, useResolvedLanguage, useHasHydrated } from "@/store";
 import {
   API_JS,
@@ -12,8 +12,6 @@ import io, { MockSocket } from "@/utils/editor/socket";
 import { createFetchProxy } from "@/utils/editor/fetch";
 import { createXHRProxy } from "@/utils/editor/xhr";
 import { DocEditor } from "@/utils/editor/types";
-import { createExtensionLoader } from "@/utils/extension";
-import InstallExtensionDialog from "@/components/install-extension-dialog";
 
 const BRIDGE_READY = "xinghuo-office-ready";
 const BRIDGE_OPEN = "xinghuo-office-open";
@@ -23,6 +21,7 @@ const BRIDGE_SAVE = "xinghuo-office-save";
 const BRIDGE_SAVING = "xinghuo-office-saving";
 const BRIDGE_SAVED = "xinghuo-office-saved";
 const BRIDGE_ERROR = "xinghuo-office-error";
+const BRIDGE_CANCEL_SAVE = "xinghuo-office-cancel-save";
 
 const MIME_TYPES: Record<string, string> = {
   doc: "application/msword",
@@ -40,8 +39,6 @@ export default function Page() {
   const theme = useAppStore((state) => state.theme);
   const hasHydrated = useHasHydrated();
   const isDirty = useRef(false);
-  const [showInstallHint, setShowInstallHint] = useState(false);
-  const tryDirectRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -62,9 +59,7 @@ export default function Page() {
     const apiUrl = APP_ROOT + API_JS;
     const searchParams = new URLSearchParams(window.location.search);
 
-    const fileId = searchParams.get("fileId");
     const newDoc = searchParams.get("new");
-    const fileUrl = searchParams.get("url");
     const paramEditing = searchParams.get("editing");
     const paramLang = searchParams.get("lang");
     const paramTheme = searchParams.get("theme");
@@ -89,6 +84,7 @@ export default function Page() {
 
     let editor: DocEditor | null = null;
     let saveInProgress = false;
+    let activeSaveId: string | undefined;
     let userInteracted = false;
 
     const postBridgeMessage = (
@@ -104,28 +100,72 @@ export default function Page() {
       );
     };
 
-    const requestExport = () => {
+    const requestExport = (saveId?: string) => {
       if (!bridgeEnabled || !editor || saveInProgress) return;
       saveInProgress = true;
-      postBridgeMessage(BRIDGE_SAVING);
+      activeSaveId = saveId;
+      postBridgeMessage(BRIDGE_SAVING, { saveId });
       try {
         editor.downloadAs(server.getDocument().fileType);
       } catch (error) {
         saveInProgress = false;
+        const failedSaveId = activeSaveId;
+        activeSaveId = undefined;
         console.error("Failed to save embedded document", error);
         postBridgeMessage(BRIDGE_ERROR, {
+          saveId: failedSaveId,
           message: "Failed to generate the updated document",
         });
       }
     };
 
+    const resetEditorModifiedState = () => {
+      try {
+        // Public Docs API: clear the saved snapshot so the next edit emits a
+        // fresh onDocumentStateChange(true) and Save becomes available again.
+        editor?.setDocumentModified?.(false);
+      } catch (error) {
+        console.warn("Failed to reset the public Office modified state", error);
+      }
+
+      try {
+        const frame = document.querySelector<HTMLIFrameElement>(
+          'iframe[name="frameEditor"]'
+        );
+        const frameWindow = frame?.contentWindow as
+          | (Window & {
+              Asc?: {
+                editor?: {
+                  asc_onSaveCallback?: (result: { err_code: number }) => void;
+                };
+              };
+            })
+          | null;
+        frameWindow?.Asc?.editor?.asc_onSaveCallback?.({ err_code: 0 });
+      } catch (error) {
+        // Older editor builds occasionally need this internal completion
+        // callback. It is best-effort and must never prevent the public reset.
+        console.warn("Failed to complete the legacy Office save callback", error);
+      }
+    };
+
     server.setDownloadHandler(({ data, fileName, fileType }) => {
-      if (!bridgeEnabled || !saveInProgress) return false;
+      if (!bridgeEnabled) return false;
+      // A cancelled or superseded bridge export must still be consumed here;
+      // otherwise EditorServer falls back to a browser download.
+      if (!saveInProgress) return true;
+      const completedSaveId = activeSaveId;
       saveInProgress = false;
+      activeSaveId = undefined;
       isDirty.current = false;
+      // downloadAs exports a snapshot but does not always reset OnlyOffice's
+      // internal modified flag. Reset it so the next edit produces a fresh
+      // onDocumentStateChange(true) event and can be saved again.
+      resetEditorModifiedState();
       postBridgeMessage(
         BRIDGE_SAVED,
         {
+          saveId: completedSaveId,
           buffer: data,
           fileName,
           mimeType:
@@ -365,7 +405,21 @@ export default function Page() {
         return;
       }
 
-      if (event.data.type === BRIDGE_SAVE) requestExport();
+      if (event.data.type === BRIDGE_SAVE) {
+        requestExport(
+          typeof event.data.saveId === "string" ? event.data.saveId : undefined
+        );
+        return;
+      }
+
+      if (event.data.type === BRIDGE_CANCEL_SAVE) {
+        const saveId =
+          typeof event.data.saveId === "string" ? event.data.saveId : undefined;
+        if (!saveId || !activeSaveId || saveId === activeSaveId) {
+          saveInProgress = false;
+          activeSaveId = undefined;
+        }
+      }
     };
 
     window.addEventListener("message", handleBridgeMessage);
@@ -377,18 +431,6 @@ export default function Page() {
       }
       if (newDoc) {
         server.openNew(newDoc);
-      }
-      if (fileUrl && !fileId) {
-        const { loader, tryDirect } = createExtensionLoader({
-          onWaiting: () => setShowInstallHint(true),
-          onReady: () => setShowInstallHint(false),
-        });
-        tryDirectRef.current = tryDirect;
-        server.openUrl(fileUrl, {
-          fileType: searchParams.get("fileType") || "",
-          fileName: searchParams.get("fileName") || "",
-          loader,
-        });
       }
       loadEditor();
     };
@@ -407,11 +449,6 @@ export default function Page() {
 
   return (
     <>
-      <InstallExtensionDialog
-        open={showInstallHint}
-        onClose={() => setShowInstallHint(false)}
-        onTryDirect={tryDirectRef.current || undefined}
-      />
       <div>
         <div className="w-screen h-screen">
           <div id="placeholder">

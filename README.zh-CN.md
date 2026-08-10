@@ -1,118 +1,70 @@
-<p align="center">
-  <img src="./public/logo.svg" width="120" height="120" alt="Office App Logo">
-</p>
+# 星火 Office
 
-<h1 align="center">ZIZIYI Office</h1>
+这是一个支持 DOCX、XLSX、PPTX 的自托管浏览器 Office 编辑器。
 
-<p align="center">
-  <strong>一款现代化、本地优先的 Office 文档预览与编辑解决方案。</strong>
-</p>
+文档通过浏览器内存传入编辑器，使用 ONLYOFFICE Web Apps 与 x2t WebAssembly 在用户设备上处理。最终镜像不运行 DocumentServer，不向 Office 后端上传文档，也不再依赖 `office-editor.ziziyi.com`。
 
-<p align="center">
-  <img src="https://img.shields.io/badge/%E7%89%88%E6%9C%AC-0.1.0-blue.svg" alt="Version">
-  <img src="https://img.shields.io/badge/%E6%A1%86%E6%9E%B6-Next.js%2015-black.svg" alt="Framework">
-  <img src="https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-AGPL%20v3-orange.svg" alt="License">
-  <a href="https://o.ziziyi.com/">
-    <img src="https://img.shields.io/badge/%E7%BD%91%E7%AB%99-o.ziziyi.com-blue.svg" alt="Website">
-  </a>
-</p>
+## 隐私与安全
 
-<p align="center">
-  <a href="https://o.ziziyi.com/"><strong>🚀 在线演示</strong></a> | <span>中文版</span> | <a href="README.md">English</a>
-</p>
+- 编辑器脚本、字体、Worker 和 WebAssembly 全部由同源服务器提供。
+- 已禁用第三方 Office 插件和网盘集成。
+- 严格的内容安全策略会阻止第三方网络请求。
+- 构建会扫描旧作者资源域名、统计服务域名等残留，发现后直接失败。
+- 星火通过限定来源的 `postMessage` 桥接，并以 `ArrayBuffer` 传输文档。
 
-<p align="center">
-  <strong>快速创建:</strong>
-  <a href="https://o.ziziyi.com/editor?new=docx">📄 Word 文档</a> | 
-  <a href="https://o.ziziyi.com/editor?new=xlsx">📊 Excel 表格</a> | 
-  <a href="https://o.ziziyi.com/editor?new=pptx">📽️ PowerPoint 幻灯片</a>
-</p>
+## 构建镜像
 
----
+服务器需要安装 Docker，并能获取以下官方基础镜像：
 
-## 🚀 概览
+```text
+onlyoffice/documentserver:9.4.0.1
+node:22-alpine
+caddy:2-alpine
+```
 
-**ZIZIYI Office** 是一款强大的 Web 应用程序，旨在为您提供在浏览器中直接查看和编辑 Office 文档（Word、Excel、PowerPoint）的无缝体验。它基于“本地优先”的设计理念，在提供桌面级编辑体验的同时，确保您的文档隐私和安全。
+构建：
 
-### 🌍 访问选项
+```bash
+docker build \
+  --build-arg DS_VERSION=9.4.0.1 \
+  --build-arg HASH=1 \
+  -t xinghuo-office:9.4.0.1-1 \
+  .
+```
 
-- **亚太地区优化访问 ([o.ziziyi.com](https://o.ziziyi.com/))**：部署于 EdgeOne 平台。域名更简短易记，且在亚太地区（如中国、日本、新加坡等）网络连接速度更快。
-- **全球通用访问 ([office.ziziyi.com](https://office.ziziyi.com/))**：部署于 Cloudflare Pages 平台。建议亚太地区以外的用户使用。
+ONLYOFFICE 镜像只在构建阶段用于提取静态资源，不会在最终容器中运行完整 DocumentServer。
 
-## ✨ 核心特性
+启动：
 
-- **📂 多格式支持**: 支持打开和编辑 `.docx`、`.xlsx` 和 `.pptx` 文件。
-- **🔒 本地优先**: 所有文件均在浏览器本地处理，确保数据隐私。
-- **⚡ 快速且响应迅速**: 基于 Next.js 15+ 构建，并针对性能进行了优化。
-- **🛠️ 丰富工具**: 集成了先进的编辑功能。
-- **📦 持久化存储**: 使用 IndexedDB 进行本地文件管理。
-- **🌐 云端集成**: 通过 Uppy 轻松选择文件（支持 Google Drive、Dropbox、OneDrive）。
+```bash
+docker run -d \
+  --name xinghuo-office \
+  --restart unless-stopped \
+  -p 127.0.0.1:18080:80 \
+  xinghuo-office:9.4.0.1-1
+```
 
-## 🛠️ 技术栈
+## 1Panel 编排
 
-- **框架**: [Next.js](https://nextjs.org/)
-- **状态管理**: [Zustand](https://github.com/pmndrs/zustand)
-- **UI 组件**: [Radix UI](https://www.radix-ui.com/) & [Lucide Icons](https://lucide.dev/)
-- **数据库**: [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) (通过 `idb`)
-- **部署**: [Cloudflare Pages](https://pages.cloudflare.com/)
+先将仓库克隆到 `/opt/office-website` 并执行上面的构建命令，然后使用：
 
-## 🛠️ 快速开始
+```yaml
+services:
+  office:
+    image: xinghuo-office:9.4.0.1-1
+    container_name: xinghuo-office
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18080:80"
+```
 
-### 前提条件
+在 1Panel 网站中将自己的域名反向代理到 `http://127.0.0.1:18080`，并开启 HTTPS。正式环境强烈建议使用域名和 HTTPS；HTTPS 的星火网页版通常会阻止嵌入 HTTP IP 地址。
 
-- Node.js 22+
-- pnpm (推荐)
+## 本地开发
 
-### 安装步骤
+```bash
+pnpm install
+pnpm dev
+```
 
-1. 克隆仓库:
-
-   ```bash
-   git clone <repository-url>
-   cd website
-   ```
-
-2. 安装依赖:
-
-   ```bash
-   pnpm install
-   ```
-
-3. 启动开发服务器:
-
-   ```bash
-   pnpm dev
-   ```
-
-4. 在浏览器中访问 [http://localhost:3000](http://localhost:3000)。
-
-## 🚢 部署
-
-本项目已预配置 Cloudflare Pages。
-
-- **生产环境构建**: `pnpm build`
-- **部署到生产环境**: `pnpm deploy`
-- **预览部署**: `pnpm deploy:preview`
-
-## 🤝 贡献
-
-欢迎贡献！请随时提交 Pull Request 或开启 Issue。
-
-## 📜 许可证
-
-本项目采用 **GNU Affero General Public License Version 3 (AGPL v3)** 开源协议。
-
-## 🙏 鸣谢
-
-特别感谢以下开源项目，是它们让本项目成为可能：
-
-- [ONLYOFFICE Web Apps](https://github.com/ONLYOFFICE/web-apps)
-- [OnlyOffice x2t WASM](https://github.com/cryptpad/onlyoffice-x2t-wasm) - 浏览器内高性能文档转换。
-- [ONLYOFFICE SDKJS](https://github.com/ONLYOFFICE/sdkjs)
-- [Office Converters](https://github.com/cryptpad/office-converters)
-
----
-
-<p align="center">
-  用心打造更好的办公体验。❤️
-</p>
+本项目及所使用的 ONLYOFFICE Community 组件采用 AGPL-3.0 兼容条款。通过网络提供修改后的应用时，请保留相应声明并公开对应源代码修改。

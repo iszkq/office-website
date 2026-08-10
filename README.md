@@ -1,118 +1,70 @@
-<p align="center">
-  <img src="./public/logo.svg" width="120" height="120" alt="Office App Logo">
-</p>
+# Xinghuo Office
 
-<h1 align="center">ZIZIYI Office</h1>
+A self-hosted, browser-local Office editor for DOCX, XLSX, and PPTX files.
 
-<p align="center">
-  <strong>A modern, local-first Office document preview and editing solution.</strong>
-</p>
+Documents are passed to the editor in browser memory and processed locally with ONLYOFFICE Web Apps and x2t WebAssembly. The production image does not run DocumentServer, upload documents to an Office backend, or require the former `office-editor.ziziyi.com` service.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version">
-  <img src="https://img.shields.io/badge/framework-Next.js%2015-black.svg" alt="Framework">
-  <img src="https://img.shields.io/badge/license-AGPL%20v3-orange.svg" alt="License">
-  <a href="https://office.ziziyi.com/">
-    <img src="https://img.shields.io/badge/website-office.ziziyi.com-blue.svg" alt="Website">
-  </a>
-</p>
+## Security model
 
-<p align="center">
-  <a href="https://office.ziziyi.com/"><strong>🚀 Live Demo</strong></a> | <a href="README.zh-CN.md">中文版</a> | <span>English</span>
-</p>
+- Editor scripts, fonts, workers, and WebAssembly are served from the same origin.
+- Third-party Office plugins and cloud-drive integrations are disabled.
+- A restrictive Content Security Policy blocks third-party network requests.
+- Builds fail if known former-operator or analytics domains remain in generated assets.
+- The Xinghuo integration uses a strict-origin `postMessage` bridge and transfers document data as `ArrayBuffer`.
 
-<p align="center">
-  <strong>Quick Create:</strong>
-  <a href="https://office.ziziyi.com/editor?new=docx">📄 Word</a> | 
-  <a href="https://office.ziziyi.com/editor?new=xlsx">📊 Excel</a> | 
-  <a href="https://office.ziziyi.com/editor?new=pptx">📽️ PowerPoint</a>
-</p>
+## Build
 
----
+Requirements: Docker with access to the official images below.
 
-## 🚀 Overview
+```text
+onlyoffice/documentserver:9.4.0.1
+node:22-alpine
+caddy:2-alpine
+```
 
-**ZIZIYI Office** is a powerful web application designed to provide a seamless experience for viewing and editing Office documents (Word, Excel, PowerPoint) directly in your browser. Built with a "local-first" philosophy, it ensures your documents remain private and secure while providing a desktop-class editing experience.
+Build the production image:
 
-### 🌍 Access Options
+```bash
+docker build \
+  --build-arg DS_VERSION=9.4.0.1 \
+  --build-arg HASH=1 \
+  -t xinghuo-office:9.4.0.1-1 \
+  .
+```
 
-- **Global ([office.ziziyi.com](https://office.ziziyi.com/))**: Hosted on Cloudflare Pages. Recommended for users outside the Asia-Pacific region.
-- **Asia-Pacific Optimized ([o.ziziyi.com](https://o.ziziyi.com/))**: Hosted on EdgeOne. Features a shorter, easier-to-remember domain and offers faster access for users in the Asia-Pacific region (e.g., China, Japan, Singapore).
+The ONLYOFFICE image is used only as a build-stage source for static resources. It is not running in the final container.
 
-## ✨ Key Features
+Run locally:
 
-- **📂 Multi-Format Support**: Open and edit `.docx`, `.xlsx`, and `.pptx` files.
-- **🔒 Local-First**: Files are processed locally in your browser, ensuring data privacy.
-- **⚡ Fast & Responsive**: Built with Next.js 15+ and optimized for performance.
-- **🛠️ Rich Tools**: Integrated with advanced editing capabilities.
-- **📦 Persistent Storage**: Uses IndexedDB for local file management.
-- **🌐 Cloud Integration**: Easy file selection via Uppy (Google Drive, Dropbox, OneDrive).
+```bash
+docker run -d \
+  --name xinghuo-office \
+  --restart unless-stopped \
+  -p 127.0.0.1:18080:80 \
+  xinghuo-office:9.4.0.1-1
+```
 
-## 🛠️ Technology Stack
+## 1Panel Compose
 
-- **Framework**: [Next.js](https://nextjs.org/)
-- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
-- **UI Components**: [Radix UI](https://www.radix-ui.com/) & [Lucide Icons](https://lucide.dev/)
-- **Database**: [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) (via `idb`)
-- **Deployment**: [Cloudflare Pages](https://pages.cloudflare.com/)
+Clone this repository to `/opt/office-website`, build the image with the command above, then use:
 
-## 🛠️ Getting Started
+```yaml
+services:
+  office:
+    image: xinghuo-office:9.4.0.1-1
+    container_name: xinghuo-office
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18080:80"
+```
 
-### Prerequisites
+Configure a 1Panel website reverse proxy to `http://127.0.0.1:18080` and enable HTTPS. A domain with HTTPS is strongly recommended; an HTTP IP endpoint will be blocked when embedded by an HTTPS Xinghuo web client.
 
-- Node.js 22+
-- pnpm (recommended)
+## Development
 
-### Installation
+```bash
+pnpm install
+pnpm dev
+```
 
-1. Clone the repository:
-
-   ```bash
-   git clone <repository-url>
-   cd website
-   ```
-
-2. Install dependencies:
-
-   ```bash
-   pnpm install
-   ```
-
-3. Run the development server:
-
-   ```bash
-   pnpm dev
-   ```
-
-4. Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## 🚢 Deployment
-
-The project is configured for Cloudflare Pages.
-
-- **Production Build**: `pnpm build`
-- **Deploy to Production**: `pnpm deploy`
-- **Deploy Preview**: `pnpm deploy:preview`
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request or open an issue.
-
-## 📜 License
-
-This project is licensed under the **GNU Affero General Public License Version 3 (AGPL v3)**.
-
-## 🙏 Acknowledgments
-
-Special thanks to the following projects that made this possible:
-
-- [ONLYOFFICE Web Apps](https://github.com/ONLYOFFICE/web-apps)
-- [OnlyOffice x2t WASM](https://github.com/cryptpad/onlyoffice-x2t-wasm) - High-performance document conversion in the browser.
-- [ONLYOFFICE SDKJS](https://github.com/ONLYOFFICE/sdkjs)
-- [Office Converters](https://github.com/cryptpad/office-converters)
-
----
-
-<p align="center">
-  Built with ❤️ for a better office experience.
-</p>
+The source and ONLYOFFICE Community components are distributed under AGPL-3.0-compatible terms. Preserve the corresponding notices and publish source changes when providing the modified application over a network.

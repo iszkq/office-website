@@ -7,8 +7,8 @@ import {
   Locale,
   LocaleExtend,
   standardizeLocale,
-} from "@ziziyi/utils";
-import { type OfficeTheme, type PluginMode } from "@/utils/editor/types";
+} from "@/utils/locale";
+import { type OfficeTheme } from "@/utils/editor/types";
 
 /**
  * Resolves the language setting to an actual locale code.
@@ -32,26 +32,22 @@ interface AppState {
   // Settings State
   language: Language;
   theme: OfficeTheme;
-  plugins: PluginMode;
 
   // Actions
   setState: (
-    state: Partial<Pick<AppState, "language" | "theme" | "plugins">>,
+    state: Partial<Pick<AppState, "language" | "theme">>,
   ) => void;
 }
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       // Document Initial State
-      server: new EditorServer({
-        getState: () => get(),
-      }),
+      server: new EditorServer(),
 
       // Settings Initial State
       language: LocaleExtend.Auto,
       theme: "theme-white",
-      plugins: "featured",
 
       // Settings Actions
       setState: (newState) => set((state) => ({ ...state, ...newState })),
@@ -62,7 +58,6 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         language: state.language,
         theme: state.theme,
-        plugins: state.plugins,
       }),
     },
   ),

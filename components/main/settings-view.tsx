@@ -5,15 +5,11 @@ import {
   Globe,
   Palette,
   Check,
-  Puzzle,
-  Star,
-  Layers,
-  ShieldOff,
 } from "lucide-react";
 import * as Illustration from "@/components/svg";
 import { useExtracted } from "next-intl";
 import { cn } from "@/lib/utils";
-import { languages, LocaleName, LocaleExtend, Language } from "@ziziyi/utils";
+import { locales, LocaleName, LocaleExtend, Language } from "@/utils/locale";
 import {
   Select,
   SelectContent,
@@ -36,15 +32,13 @@ function getLanguageLabel(code: Language): string {
 // Sort languages: Auto first, then alphabetically by display name
 const sortedLanguages = [
   LocaleExtend.Auto,
-  ...languages
-    .filter((code) => code !== LocaleExtend.Auto)
-    .sort((a, b) => getLanguageLabel(a).localeCompare(getLanguageLabel(b))),
+  ...[...locales].sort((a, b) => getLanguageLabel(a).localeCompare(getLanguageLabel(b))),
 ];
 
 export function SettingsView() {
   const t = useExtracted();
   usePageTitle(t("Settings — ZIZIYI Office"));
-  const { language, theme, plugins, setState } = useAppStore();
+  const { language, theme, setState } = useAppStore();
 
   const themes: {
     id: OfficeTheme;
@@ -183,52 +177,6 @@ export function SettingsView() {
           </div>
         </section>
 
-        <section className="space-y-4">
-          <div className="flex items-center gap-2 text-lg font-semibold">
-            <Puzzle className="w-5 h-5 text-primary" />
-            <h2>{t("Plugins")}</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {[
-              { id: "featured", label: t("Load Featured Plugins"), icon: Star },
-              { id: "all", label: t("Load All Plugins"), icon: Layers },
-              { id: "none", label: t("Disable Plugins"), icon: ShieldOff },
-            ].map((mode) => (
-              <button
-                key={mode.id}
-                onClick={() => setState({ plugins: mode.id as any })}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-xl border transition-all text-left group relative",
-                  plugins === mode.id
-                    ? "border-primary bg-primary/5 ring-1 ring-primary/15 shadow-sm"
-                    : "border-border hover:border-primary/20 hover:bg-sidebar-hover",
-                )}
-              >
-                <div
-                  className={cn(
-                    "w-9 h-9 rounded-lg flex items-center justify-center transition-colors shrink-0",
-                    plugins === mode.id
-                      ? "bg-primary/15 text-primary"
-                      : "bg-muted text-text-secondary group-hover:bg-primary/10 group-hover:text-primary",
-                  )}
-                >
-                  <mode.icon className="w-[18px] h-[18px]" />
-                </div>
-                <div className="flex-1 flex items-center justify-between min-w-0 pr-1">
-                  <span className="text-xs font-bold leading-none truncate pr-2">
-                    {mode.label}
-                  </span>
-                  {plugins === mode.id && (
-                    <Check
-                      className="w-3.5 h-3.5 text-primary shrink-0"
-                      strokeWidth={3}
-                    />
-                  )}
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
       </div>
 
       <div className="p-6 bg-yellow-50/50 dark:bg-yellow-900/10 border border-yellow-100 dark:border-yellow-900/30 rounded-2xl">

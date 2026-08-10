@@ -6,7 +6,7 @@
 
 # OnlyOffice DocumentServer version — controls both the source image
 # tag AND the versioned asset directory prefix (/v<DS_VERSION>-<HASH>).
-ARG DS_VERSION=9.3.1
+ARG DS_VERSION=9.4.0.1
 
 # Revision counter. Bump this (--build-arg HASH=2) whenever you want
 # to bust the browser cache for the OnlyOffice assets without changing
@@ -73,12 +73,15 @@ COPY --from=builder /app/out ./
 COPY --from=documentserver /var/www/onlyoffice/documentserver/fonts         ./v${DS_VERSION}-${HASH}/fonts
 COPY --from=documentserver /var/www/onlyoffice/documentserver/sdkjs         ./v${DS_VERSION}-${HASH}/sdkjs
 COPY --from=documentserver /var/www/onlyoffice/documentserver/web-apps      ./v${DS_VERSION}-${HASH}/web-apps
-COPY --from=documentserver /var/www/onlyoffice/documentserver/sdkjs-plugins ./v${DS_VERSION}-${HASH}/sdkjs-plugins
-
 # api.js is generated from a template at runtime in a full DocumentServer
 # deployment, but here we serve it statically — copy the template as-is.
 RUN cp "./v${DS_VERSION}-${HASH}/web-apps/apps/api/documents/api.js.tpl" \
        "./v${DS_VERSION}-${HASH}/web-apps/apps/api/documents/api.js"
+
+# Fail closed if the generated site or editor resources still reference the
+# previous operator or other explicitly forbidden third-party services.
+RUN matches="$(grep -RIlE 'office-editor\.ziziyi\.com|office-plugins\.ziziyi\.com|googletagmanager\.com|google-analytics\.com|api\.producthunt\.com|chromewebstore\.google\.com' /srv || true)" && \
+    if [ -n "$matches" ]; then echo "$matches"; exit 1; fi
 
 # Copy Caddyfile.
 COPY Caddyfile /etc/caddy/Caddyfile

@@ -19,13 +19,13 @@ export const metadata: Metadata = {
     "ZIZIYI Office",
   ],
   alternates: {
-    canonical: "https://office.ziziyi.com/template",
+    canonical: "https://office.221819.best/template",
   },
   openGraph: {
     title: "Free Office Templates — Word, Excel & PowerPoint | ZIZIYI Office",
     description:
       "Free professional templates for Word, Excel, and PowerPoint. Edit directly in your browser — no login needed.",
-    url: "https://office.ziziyi.com/template",
+    url: "https://office.221819.best/template",
     type: "website",
   },
   twitter: {

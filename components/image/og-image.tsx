@@ -135,7 +135,7 @@ export const OgImage = async ({
         {/* Bottom: url */}
         <div tw="flex">
           <span tw="text-xl" style={{ color: "rgba(255,255,255,0.3)", fontWeight: 400 }}>
-            office.ziziyi.com
+            office.221819.best
           </span>
         </div>
       </div>

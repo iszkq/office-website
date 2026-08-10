@@ -1,6 +1,16 @@
 :80 {
     root * /srv
 
+    # The editor receives decrypted documents in the browser. Keep every
+    # executable and network request on this origin so third-party code cannot
+    # observe or exfiltrate document content.
+    header {
+        Content-Security-Policy "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: blob:; connect-src 'self' data: blob:; worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self' blob:; media-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        X-Content-Type-Options "nosniff"
+    }
+
     # Serve static files; return a genuine 404 if the file doesn't exist
     # (do NOT fall back to index.html — Next.js static export has a real
     # HTML file for every route, and a fake 200 would pollute caches).

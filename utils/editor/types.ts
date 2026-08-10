@@ -13,6 +13,7 @@ export interface DocEditor {
   requestClose: (data: unknown) => void;
   requestRoles: (data: unknown) => void;
   serviceCommand: (command: string, data: unknown) => void;
+  setDocumentModified?: (modified: boolean) => void;
   setActionLink: (data: unknown) => void;
   setEmailAddresses: (data: unknown) => void;
   setFavorite: (data: unknown) => void;
@@ -209,12 +210,6 @@ export type OfficeTheme =
   | "theme-dark"
   | "theme-night"
   | "theme-contrast-dark";
-
-export type PluginMode = "featured" | "all" | "none";
-
-export interface ServerOptions {
-  getState?: () => { plugins: PluginMode };
-}
 
 export type DownloadOutput = {
   data: ArrayBuffer;
