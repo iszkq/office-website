@@ -13,6 +13,10 @@ ARG DS_VERSION=9.4.0.1
 # the DocumentServer version itself.
 ARG HASH=1
 
+# Pin pnpm so local, Cloudflare and GitHub builds interpret the lockfile and
+# dependency build-script policy identically.
+ARG PNPM_VERSION=11.16.0
+
 # ============================================================
 # Stage 1: OnlyOffice DocumentServer assets source
 # ============================================================
@@ -32,6 +36,7 @@ FROM node:22-alpine AS builder
 # Re-declare args inside this stage to make them visible here.
 ARG DS_VERSION
 ARG HASH
+ARG PNPM_VERSION
 
 # Expose the versioned asset path to Next.js at build time.
 ENV NEXT_PUBLIC_APP_ROOT=/v${DS_VERSION}-${HASH}
@@ -39,10 +44,11 @@ ENV NEXT_PUBLIC_APP_ROOT=/v${DS_VERSION}-${HASH}
 WORKDIR /app
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
-# Copy dependency manifests first for better layer caching.
-COPY package.json pnpm-lock.yaml ./
+# Copy dependency manifests and the build-script allowlist first for better
+# layer caching and deterministic installs in clean Docker builders.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # Install dependencies (frozen lockfile for reproducibility).
 RUN pnpm install --frozen-lockfile
