@@ -24,11 +24,24 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/x2t-:suffix/:path*",
+        source: "/x2t-1/:path*",
         headers: [
           {
             key: "Content-Encoding",
             value: "br",
+          },
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31556952, immutable",
+          },
+        ],
+      },
+      {
+        source: "/x2t-compat/:path*",
+        headers: [
+          {
+            key: "Content-Encoding",
+            value: "gzip",
           },
           {
             key: "Cache-Control",

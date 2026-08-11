@@ -45,10 +45,17 @@
     }
     header @next_static Cache-Control "public, max-age=31556952, immutable"
 
-    # Brotli-encoded x2t versioned bundles
-    @x2t_suffix {
-        path /x2t-*/*
+    # Pre-compressed x2t bundles. Android System WebView 103 cannot load the
+    # Brotli response, so image builds also provide the same runtime as gzip.
+    @x2t_brotli {
+        path /x2t-1/*
     }
-    header @x2t_suffix Content-Encoding br
-    header @x2t_suffix Cache-Control "public, max-age=31556952, immutable"
+    header @x2t_brotli Content-Encoding br
+    header @x2t_brotli Cache-Control "public, max-age=31556952, immutable"
+
+    @x2t_webview {
+        path /x2t-compat/*
+    }
+    header @x2t_webview Content-Encoding gzip
+    header @x2t_webview Cache-Control "public, max-age=31556952, immutable"
 }

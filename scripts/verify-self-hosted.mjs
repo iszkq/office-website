@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
+import { gunzipSync } from "node:zlib";
 
 const root = resolve(process.argv[2] || "out");
 const forbidden = [
@@ -40,6 +41,19 @@ async function scan(path) {
 }
 
 await scan(root);
+
+const compatScript = gunzipSync(
+  await readFile(join(root, "x2t-compat", "x2t.js")),
+).toString("utf8");
+const compatWasm = gunzipSync(
+  await readFile(join(root, "x2t-compat", "x2t.wasm")),
+);
+if (
+  !compatScript.includes("var Module") ||
+  !compatWasm.subarray(0, 4).equals(Buffer.from([0, 97, 115, 109]))
+) {
+  throw new Error("Android WebView x2t compatibility assets are invalid");
+}
 
 if (matches.length > 0) {
   console.error("Forbidden third-party runtime references found:\n" + matches.join("\n"));

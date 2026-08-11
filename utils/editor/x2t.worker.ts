@@ -11,9 +11,13 @@ import { AvsFileType, X2tConvertParams, X2tConvertResult } from "./types";
 
 /* eslint-disable no-restricted-globals */
 
-// Base URL for x2t files - hardcoded since blob URL workers can't determine origin
-const BASE_URL = self.location.origin + "/x2t-1/";
-// const BASE_URL = self.location.origin + "/wasm/x2t/";
+// Asset URLs are explicit because blob URL workers cannot determine the
+// website directory that created them. Android System WebView 103 cannot
+// decode the Brotli response used by the normal x2t bundle, so it receives a
+// gzip-compatible build produced from the same source during image builds.
+const BROTLI_BASE_URL = self.location.origin + "/x2t-1/";
+const WEBVIEW_BASE_URL = self.location.origin + "/x2t-compat/";
+const isAndroidWebView = /Android.*;\s*wv\)/i.test(navigator.userAgent);
 
 let x2t: any = null;
 let initPromise: Promise<void> | null = null;
@@ -23,30 +27,27 @@ let initPromise: Promise<void> | null = null;
  */
 async function initX2t(): Promise<void> {
   if (x2t) return;
-  // self.wasmBinaryFile = BASE_URL + "x2t.wasm";
+  const loadScript = async (baseUrl: string): Promise<void> => {
+    const scriptUrl = baseUrl + "x2t.js";
+    // Emscripten uses __filename to locate x2t.wasm from a blob worker.
+    Object.assign(self, { __filename: baseUrl });
 
-  const scriptUrl = BASE_URL + "x2t.js";
+    try {
+      importScripts(scriptUrl);
+      return;
+    } catch (importError) {
+      console.warn("[x2t.worker] importScripts failed; using fetch fallback", {
+        scriptUrl,
+        error: importError,
+      });
+    }
 
-  // fix .wasm loading
-  Object.assign(self, {
-    __filename: BASE_URL,
-  });
-
-  // Load x2t script in Worker context.  Android WebView 103 has a known
-  // incompatibility with `importScripts()` when the response is Brotli
-  // encoded (the same file loads normally in desktop browsers).  Fetching
-  // the script first lets WebView's Fetch implementation decode the response
-  // and evaluating the decoded source keeps the fallback limited to this
-  // worker; desktop browsers still use the normal importScripts path.
-  try {
-    importScripts(scriptUrl);
-  } catch (importError) {
-    console.warn("[x2t.worker] importScripts failed; using fetch fallback", {
-      scriptUrl,
-      error: importError,
-    });
-
-    const response = await fetch(scriptUrl, { credentials: "same-origin" });
+    let response: Response;
+    try {
+      response = await fetch(scriptUrl, { credentials: "same-origin" });
+    } catch (fetchError) {
+      throw new Error(`Failed to fetch ${scriptUrl}: ${String(fetchError)}`);
+    }
     if (!response.ok) {
       throw new Error(
         `Failed to load x2t.js (${response.status} ${response.statusText})`,
@@ -57,6 +58,19 @@ async function initX2t(): Promise<void> {
     // semantics of importScripts() so the Emscripten `Module` object is
     // exposed on the WorkerGlobalScope.
     (0, eval)(`${source}\n//# sourceURL=${scriptUrl}`);
+  };
+
+  const preferredBaseUrl = isAndroidWebView
+    ? WEBVIEW_BASE_URL
+    : BROTLI_BASE_URL;
+  try {
+    await loadScript(preferredBaseUrl);
+  } catch (preferredError) {
+    if (preferredBaseUrl === WEBVIEW_BASE_URL) throw preferredError;
+    console.warn("[x2t.worker] Brotli assets failed; using WebView assets", {
+      error: preferredError,
+    });
+    await loadScript(WEBVIEW_BASE_URL);
   }
 
   x2t = (self as any).Module;

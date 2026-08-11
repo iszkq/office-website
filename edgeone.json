@@ -3,11 +3,24 @@
   "outputDirectory": "./out",
   "headers": [
     {
-      "source": "/x2t-*",
+      "source": "/x2t-1/*",
       "headers": [
         {
           "key": "Content-Encoding",
           "value": "br"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31556952, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/x2t-compat/*",
+      "headers": [
+        {
+          "key": "Content-Encoding",
+          "value": "gzip"
         },
         {
           "key": "Cache-Control",

@@ -64,6 +64,16 @@ test("mobile previews stay responsive while Community Edition editing uses the d
   assert.match(workerSource, /fetch\(scriptUrl, \{ credentials: "same-origin" \}\)/);
   assert.match(workerSource, /importScripts failed; using fetch fallback/);
   assert.match(workerSource, /sourceURL=\$\{scriptUrl\}/);
+  assert.match(workerSource, /WEBVIEW_BASE_URL/);
+  assert.match(workerSource, /\/x2t-compat\//);
+  assert.match(workerSource, /isAndroidWebView/);
+  assert.match(workerSource, /preferredBaseUrl === WEBVIEW_BASE_URL/);
+  const prepareSource = await readSource("scripts/prepare-x2t-compat.mjs");
+  const caddySource = await readSource("Caddyfile");
+  assert.match(prepareSource, /brotliDecompress/);
+  assert.match(prepareSource, /compressGzip/);
+  assert.match(caddySource, /path \/x2t-compat\/\*/);
+  assert.match(caddySource, /header @x2t_webview Content-Encoding gzip/);
   assert.match(editorSource, /attributes: true/);
   assert.match(editorSource, /renderedPreviewErrorObserver\.observe\(document\.body/);
   assert.match(editorSource, /scheduleRenderedPreviewErrorDismissal/);
@@ -111,8 +121,8 @@ test("the mobile fixes publish under a new immutable Office image tag", async ()
     ".github/workflows/build-office-image.yml"
   );
 
-  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-8/);
-  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-[1234567]/);
+  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-9/);
+  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-[12345678]/);
   assert.match(workflowSource, /load: true/);
   assert.match(workflowSource, /push: false/);
   assert.match(workflowSource, /cache-from: type=gha,scope=xinghuo-office-9\.4/);

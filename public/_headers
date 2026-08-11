@@ -4,8 +4,12 @@
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
     X-Content-Type-Options: nosniff
 
-/x2t-*
+/x2t-1/*
     Content-Encoding: br
+    Cache-Control: public, max-age=31556952, immutable
+
+/x2t-compat/*
+    Content-Encoding: gzip
     Cache-Control: public, max-age=31556952, immutable
 
 /v9.4.0.1-*
