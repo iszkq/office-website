@@ -751,8 +751,13 @@ export default function Page() {
           return;
         }
         try {
+          // `Uint8Array.buffer` is typed as `ArrayBufferLike` by newer
+          // TypeScript versions. Copy the exact received range into a real
+          // ArrayBuffer before handing it to the document server and File API.
+          const completedBuffer = new ArrayBuffer(completedSource.buffer.byteLength);
+          new Uint8Array(completedBuffer).set(completedSource.buffer);
           await openEmbeddedDocument(
-            completedSource.buffer.buffer,
+            completedBuffer,
             completedSource.fileName,
             completedSource.fileType,
             completedSource.mimeType
