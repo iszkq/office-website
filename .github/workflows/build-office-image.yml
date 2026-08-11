@@ -79,6 +79,25 @@ jobs:
           provenance: mode=max
           sbom: true
 
+      - name: Export offline Docker image
+        id: archive
+        env:
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/xinghuo-office:9.4.0.1-2
+        run: |
+          docker pull "$IMAGE_REF"
+          docker save "$IMAGE_REF" | gzip -1 > xinghuo-office.tar.gz
+          echo "size=$(du -h xinghuo-office.tar.gz | cut -f1)" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum xinghuo-office.tar.gz | cut -d ' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload offline Docker image
+        uses: actions/upload-artifact@v4
+        with:
+          name: xinghuo-office.tar.gz
+          path: xinghuo-office.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
       - name: Publish build summary
         run: |
           echo "### Office image published" >> "$GITHUB_STEP_SUMMARY"
@@ -86,3 +105,9 @@ jobs:
           echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/xinghuo-office:9.4.0.1-2" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "Digest: ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Offline archive: xinghuo-office.tar.gz (${{ steps.archive.outputs.size }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "SHA-256: ${{ steps.archive.outputs.sha256 }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Download it from the Artifacts section of this workflow run, unzip the artifact once, then run:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+          echo "docker load < xinghuo-office.tar.gz" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
