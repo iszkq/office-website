@@ -15,6 +15,7 @@ import { DocEditor, DocumentType } from "@/utils/editor/types";
 
 const BRIDGE_READY = "xinghuo-office-ready";
 const BRIDGE_OPEN = "xinghuo-office-open";
+const BRIDGE_SOURCE_RECEIVED = "xinghuo-office-source-received";
 const BRIDGE_OPENED = "xinghuo-office-opened";
 const BRIDGE_DIRTY = "xinghuo-office-dirty";
 const BRIDGE_SAVE = "xinghuo-office-save";
@@ -53,8 +54,13 @@ export default function Page() {
 
   useEffect(() => {
     const updateViewportHeight = () => {
-      const height = Math.round(window.visualViewport?.height ?? window.innerHeight);
-      document.documentElement.style.setProperty("--office-viewport-height", `${height}px`);
+      const height = Math.round(
+        window.visualViewport?.height ?? window.innerHeight
+      );
+      document.documentElement.style.setProperty(
+        "--office-viewport-height",
+        `${height}px`
+      );
     };
 
     updateViewportHeight();
@@ -72,8 +78,14 @@ export default function Page() {
     return () => {
       window.removeEventListener("resize", updateViewportHeight);
       window.removeEventListener("orientationchange", updateViewportHeight);
-      window.visualViewport?.removeEventListener("resize", updateViewportHeight);
-      window.visualViewport?.removeEventListener("scroll", updateViewportHeight);
+      window.visualViewport?.removeEventListener(
+        "resize",
+        updateViewportHeight
+      );
+      window.visualViewport?.removeEventListener(
+        "scroll",
+        updateViewportHeight
+      );
       document.documentElement.style.removeProperty("--office-viewport-height");
     };
   }, []);
@@ -101,11 +113,13 @@ export default function Page() {
     const paramEditing = searchParams.get("editing");
     const paramLang = searchParams.get("lang");
     const paramTheme = searchParams.get("theme");
+    const requestedMobileMode = searchParams.get("mobile");
     const mobileMode =
-      searchParams.get("mobile") === "1" ||
-      window.matchMedia(
-        "(max-width: 750px), (max-height: 520px) and (pointer: coarse)"
-      ).matches;
+      requestedMobileMode === null
+        ? window.matchMedia(
+            "(max-width: 750px), (max-height: 520px) and (pointer: coarse)"
+          ).matches
+        : requestedMobileMode === "1";
     const compactToolbar =
       searchParams.get("compactToolbar") === "1" || mobileMode;
     const embedded = searchParams.get("embed") === "1";
@@ -396,7 +410,10 @@ export default function Page() {
             }
           },
         },
-        type: mobileMode ? "mobile" : "desktop",
+        // ONLYOFFICE Community Edition intentionally disables editing in its
+        // mobile Web editor. Keep the responsive mobile reader for previews,
+        // but use the fully editable desktop engine for mobile edit sessions.
+        type: mobileMode && !editing ? "mobile" : "desktop",
         width: "100%",
         height: "100%",
       });
@@ -406,9 +423,20 @@ export default function Page() {
       return editor;
     };
 
+    const createEditorSafely = () => {
+      try {
+        createEditor();
+      } catch (error) {
+        console.error("Failed to create DocsAPI editor", error);
+        postBridgeMessage(BRIDGE_ERROR, {
+          message: "Failed to initialize the document editor",
+        });
+      }
+    };
+
     const loadEditor = () => {
       if (window.DocsAPI && window.DocsAPI.DocEditor) {
-        createEditor();
+        createEditorSafely();
         return;
       }
       let script = document.querySelector<HTMLScriptElement>(
@@ -420,10 +448,13 @@ export default function Page() {
         document.head.appendChild(script);
       }
       script.onload = () => {
-        createEditor();
+        createEditorSafely();
       };
       script.onerror = (e) => {
         console.error("Failed to load DocsAPI script", e);
+        postBridgeMessage(BRIDGE_ERROR, {
+          message: "Failed to load the document editor assets",
+        });
       };
     };
 
@@ -444,6 +475,7 @@ export default function Page() {
           return;
         }
         try {
+          postBridgeMessage(BRIDGE_SOURCE_RECEIVED);
           await server.open(
             new File([buffer], fileName, {
               type:

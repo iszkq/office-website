@@ -26,15 +26,24 @@ async function getLogoDataUri() {
 }
 
 const docCards = [
-  { letter: "W", label: "Word", bg: "linear-gradient(135deg, #2b579a 0%, #3b79d6 100%)" },
-  { letter: "X", label: "Excel", bg: "linear-gradient(135deg, #217346 0%, #2ba362 100%)" },
-  { letter: "P", label: "Slides", bg: "linear-gradient(135deg, #c43e1c 0%, #f05228 100%)" },
+  {
+    letter: "W",
+    label: "Word",
+    bg: "linear-gradient(135deg, #2b579a 0%, #3b79d6 100%)",
+  },
+  {
+    letter: "X",
+    label: "Excel",
+    bg: "linear-gradient(135deg, #217346 0%, #2ba362 100%)",
+  },
+  {
+    letter: "P",
+    label: "Slides",
+    bg: "linear-gradient(135deg, #c43e1c 0%, #f05228 100%)",
+  },
 ];
 
-export const OgImage = async ({
-  title,
-  subtitle,
-}: OgImageProps) => {
+export const OgImage = async ({ title, subtitle }: OgImageProps) => {
   const logoBase64 = await getLogoDataUri();
   const line1 = title || "Open & Edit Office Documents";
   const line2 = subtitle || "No upload · No server · Fully private";
@@ -75,11 +84,19 @@ export const OgImage = async ({
       />
 
       {/* Left content */}
-      <div tw="flex flex-col justify-between flex-1 p-16" style={{ display: "flex" }}>
+      <div
+        tw="flex flex-col justify-between flex-1 p-16"
+        style={{ display: "flex" }}
+      >
         {/* Top: logo + brand */}
         <div tw="flex items-center" style={{ display: "flex" }}>
           {logoBase64 ? (
-            <img src={logoBase64} width="52" height="52" style={{ borderRadius: "14px" }} />
+            <img
+              src={logoBase64}
+              width="52"
+              height="52"
+              style={{ borderRadius: "14px" }}
+            />
           ) : (
             <div
               tw="flex items-center justify-center"
@@ -114,10 +131,7 @@ export const OgImage = async ({
           >
             {line1}
           </div>
-          <div
-            tw="flex items-center mt-6"
-            style={{ display: "flex" }}
-          >
+          <div tw="flex items-center mt-6" style={{ display: "flex" }}>
             <div
               tw="h-1 mr-4"
               style={{
@@ -126,7 +140,10 @@ export const OgImage = async ({
                 borderRadius: "2px",
               }}
             />
-            <span tw="text-2xl" style={{ color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>
+            <span
+              tw="text-2xl"
+              style={{ color: "rgba(255,255,255,0.5)", fontWeight: 500 }}
+            >
               {line2}
             </span>
           </div>
@@ -134,8 +151,11 @@ export const OgImage = async ({
 
         {/* Bottom: url */}
         <div tw="flex">
-          <span tw="text-xl" style={{ color: "rgba(255,255,255,0.3)", fontWeight: 400 }}>
-            office.221819.best
+          <span
+            tw="text-xl"
+            style={{ color: "rgba(255,255,255,0.3)", fontWeight: 400 }}
+          >
+            124.222.193.241:6258
           </span>
         </div>
       </div>

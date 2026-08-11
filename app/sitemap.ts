@@ -3,7 +3,7 @@ import { MetadataRoute } from "next";
 export const dynamic = "force-static";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = "https://office.221819.best";
+  const base = "https://124.222.193.241:6258";
 
   return [
     {

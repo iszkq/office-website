@@ -5,7 +5,7 @@ import { ProgressProvider } from "@/components/progress-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://office.221819.best"),
+  metadataBase: new URL("https://124.222.193.241:6258"),
   title: {
     default: "ZIZIYI Office — Free Online Word, Excel & PowerPoint Editor",
     template: "%s",
@@ -82,7 +82,7 @@ export default async function RootLayout({
     "@context": "https://schema.org",
     "@type": "WebApplication",
     name: "ZIZIYI Office",
-    url: "https://office.221819.best",
+    url: "https://124.222.193.241:6258",
     description:
       "Open, view, and edit Word, Excel, and PowerPoint documents directly in your browser. No upload, no server — your files stay private.",
     applicationCategory: "BusinessApplication",

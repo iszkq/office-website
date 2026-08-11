@@ -11,6 +11,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/settings", "/api/"],
       },
     ],
-    sitemap: "https://office.221819.best/sitemap.xml",
+    sitemap: "https://124.222.193.241:6258/sitemap.xml",
   };
 }

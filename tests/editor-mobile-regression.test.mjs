@@ -5,12 +5,27 @@ import test from "node:test";
 const readSource = (relativePath) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
-test("embedded Office uses the supported mobile editor and tracks the keyboard viewport", async () => {
+test("mobile previews stay responsive while Community Edition editing uses the desktop engine", async () => {
   const editorSource = await readSource("app/editor/page.tsx");
   const layoutSource = await readSource("app/layout.tsx");
 
-  assert.match(editorSource, /searchParams\.get\("mobile"\) === "1"/);
-  assert.match(editorSource, /type: mobileMode \? "mobile" : "desktop"/);
+  assert.match(
+    editorSource,
+    /const requestedMobileMode = searchParams\.get\("mobile"\)/
+  );
+  assert.match(editorSource, /requestedMobileMode === "1"/);
+  assert.match(
+    editorSource,
+    /type: mobileMode && !editing \? "mobile" : "desktop"/
+  );
+  assert.match(
+    editorSource,
+    /Community Edition intentionally disables editing/
+  );
+  assert.match(editorSource, /BRIDGE_SOURCE_RECEIVED/);
+  assert.match(editorSource, /postBridgeMessage\(BRIDGE_SOURCE_RECEIVED\)/);
+  assert.match(editorSource, /Failed to initialize the document editor/);
+  assert.match(editorSource, /Failed to load the document editor assets/);
   assert.match(editorSource, /compactToolbar,/);
   assert.match(editorSource, /window\.visualViewport\?\.height/);
   assert.match(editorSource, /--office-viewport-height/);
@@ -20,8 +35,14 @@ test("embedded Office uses the supported mobile editor and tracks the keyboard v
 test("saving commits spreadsheet input and releases mobile keyboard focus", async () => {
   const source = await readSource("app/editor/page.tsx");
   const requestExportStart = source.indexOf("const requestExport =");
-  const requestExportEnd = source.indexOf("const resetEditorModifiedState", requestExportStart);
-  const requestExportSource = source.slice(requestExportStart, requestExportEnd);
+  const requestExportEnd = source.indexOf(
+    "const resetEditorModifiedState",
+    requestExportStart
+  );
+  const requestExportSource = source.slice(
+    requestExportStart,
+    requestExportEnd
+  );
 
   assert.match(source, /asc_closeCellEditor/);
   assert.match(source, /editor\?\.blurFocus\?\.\(\{\}\)/);
@@ -39,6 +60,6 @@ test("the mobile fixes publish under a new immutable Office image tag", async ()
     ".github/workflows/build-office-image.yml"
   );
 
-  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-2/);
-  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-1/);
+  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-3/);
+  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-[12]/);
 });

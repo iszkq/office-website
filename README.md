@@ -28,7 +28,7 @@ Build the production image:
 docker build \
   --build-arg DS_VERSION=9.4.0.1 \
   --build-arg HASH=1 \
-  -t xinghuo-office:9.4.0.1-2 \
+  -t xinghuo-office:9.4.0.1-3 \
   .
 ```
 
@@ -41,7 +41,7 @@ docker run -d \
   --name xinghuo-office \
   --restart unless-stopped \
   -p 127.0.0.1:18080:80 \
-  xinghuo-office:9.4.0.1-2
+  xinghuo-office:9.4.0.1-3
 ```
 
 ## 1Panel Compose
@@ -51,7 +51,7 @@ Clone this repository to `/opt/office-website`, build the image with the command
 ```yaml
 services:
   office:
-    image: xinghuo-office:9.4.0.1-2
+    image: xinghuo-office:9.4.0.1-3
     container_name: xinghuo-office
     restart: unless-stopped
     ports:

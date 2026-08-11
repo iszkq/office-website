@@ -56,7 +56,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/xinghuo-office
           tags: |
-            type=raw,value=9.4.0.1-2
+            type=raw,value=9.4.0.1-3
           labels: |
             org.opencontainers.image.title=Xinghuo Office
             org.opencontainers.image.description=Self-hosted browser Office editor for Xinghuo
@@ -82,7 +82,7 @@ jobs:
       - name: Export offline Docker image
         id: archive
         env:
-          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/xinghuo-office:9.4.0.1-2
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/xinghuo-office:9.4.0.1-3
         run: |
           docker pull "$IMAGE_REF"
           docker save "$IMAGE_REF" | gzip -1 > xinghuo-office.tar.gz
@@ -102,7 +102,7 @@ jobs:
         run: |
           echo "### Office image published" >> "$GITHUB_STEP_SUMMARY"
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
-          echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/xinghuo-office:9.4.0.1-2" >> "$GITHUB_STEP_SUMMARY"
+          echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/xinghuo-office:9.4.0.1-3" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "Digest: ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Offline archive: xinghuo-office.tar.gz (${{ steps.archive.outputs.size }})" >> "$GITHUB_STEP_SUMMARY"
