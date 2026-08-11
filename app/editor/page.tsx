@@ -177,6 +177,7 @@ export default function Page() {
     let embeddedDocumentReady = false;
     let activeDocumentType: DocumentType | null = null;
     let renderedPreviewErrorObserver: MutationObserver | null = null;
+    let removeReadOnlySpreadsheetGuards: (() => void) | null = null;
     const renderedPreviewErrorTimers = new Set<number>();
 
     const postBridgeMessage = (
@@ -203,17 +204,19 @@ export default function Page() {
       }
 
       const iframeDoc = getEditorFrame()?.contentDocument;
-      if (!iframeDoc) return;
+      const candidateDocuments = [document, iframeDoc].filter(
+        (candidate): candidate is Document => Boolean(candidate)
+      );
 
       const processingErrorPattern =
         /在处理此文档时发生了错误|error occurred while (?:processing|working with) (?:this|the) document/i;
       const communityNoticePattern =
         /使用免费的社区版本|要访问移动web编辑器，需要商业许可证|using the free community version|mobile web editors?,? a commercial license is required/i;
       const isProcessingError = activeDocumentType === DocumentType.Cell;
-      const dialogCandidates = Array.from(
-        iframeDoc.querySelectorAll<HTMLElement>(
-          '[role="dialog"], .asc-window, .asc-popup, .dialog, .modal, .popup, [class*="dialog"], [class*="modal"], [class*="popup"]'
-        )
+      const dialogSelector =
+        '[role="dialog"], [aria-modal="true"], .asc-window, .asc-popup, .dialog, .modal, .popup, [class*="dialog"], [class*="modal"], [class*="popup"], [class*="window"]';
+      const dialogCandidates = candidateDocuments.flatMap((candidateDocument) =>
+        Array.from(candidateDocument.querySelectorAll<HTMLElement>(dialogSelector))
       );
       const findMatchingDialog = (pattern: RegExp) =>
         dialogCandidates.find((dialog) => pattern.test(dialog.textContent || ""));
@@ -227,16 +230,18 @@ export default function Page() {
       const actionPattern = /^(?:确定|好|关闭|OK|Close)$/i;
       const actions = Array.from(
         targetDialog.querySelectorAll<HTMLElement>(
-          'button, [role="button"], .asc-button, input[type="button"], input[type="submit"]'
+          'button, [role="button"], .asc-button, .button, [class*="button"], input[type="button"], input[type="submit"]'
         )
       );
       let confirmAction = actions.find((action) =>
         actionPattern.test((action.textContent || (action as HTMLInputElement).value || "").trim())
       );
       if (!confirmAction) {
-        const allActions = Array.from(
-          iframeDoc.querySelectorAll<HTMLElement>(
-            'button, [role="button"], .asc-button, input[type="button"], input[type="submit"]'
+        const allActions = candidateDocuments.flatMap((candidateDocument) =>
+          Array.from(
+            candidateDocument.querySelectorAll<HTMLElement>(
+              'button, [role="button"], .asc-button, .button, [class*="button"], input[type="button"], input[type="submit"]'
+            )
           )
         );
         confirmAction = allActions.find((action) => {
@@ -268,13 +273,93 @@ export default function Page() {
     };
 
     const scheduleRenderedPreviewErrorDismissal = () => {
-      [0, 100, 250, 500, 1000, 2000, 4000].forEach((delay) => {
+      [0, 100, 250, 500, 1000, 2000, 4000, 8000, 12000, 20000, 30000].forEach((delay) => {
         const timer = window.setTimeout(() => {
           renderedPreviewErrorTimers.delete(timer);
           dismissRenderedMobileSpreadsheetError();
         }, delay);
         renderedPreviewErrorTimers.add(timer);
       });
+    };
+
+    const installReadOnlySpreadsheetTapGuard = (iframe: HTMLIFrameElement) => {
+      if (
+        !bridgeEnabled ||
+        editing ||
+        !mobileMode ||
+        activeDocumentType !== DocumentType.Cell
+      ) {
+        return;
+      }
+
+      const frameWindow = iframe.contentWindow;
+      if (!frameWindow) return;
+
+      let pointerStart: { x: number; y: number; id: number } | null = null;
+      let touchStart: { x: number; y: number } | null = null;
+      const tapThreshold = 8;
+      const isSpreadsheetCanvas = (target: EventTarget | null) => {
+        const element = target as Element | null;
+        if (!element || typeof element.closest !== "function") return false;
+        return Boolean(
+          element.closest(
+            'canvas, #ws-canvas-outer, #ws-canvas, #ws-canvas-overlay, [id*="ws-canvas"], .ws-canvas-outer'
+          )
+        );
+      };
+      const isTap = (
+        start: { x: number; y: number } | null,
+        x: number,
+        y: number
+      ) =>
+        Boolean(
+          start &&
+            Math.abs(x - start.x) <= tapThreshold &&
+            Math.abs(y - start.y) <= tapThreshold
+        );
+      const blockCellTap = (event: Event) => {
+        if (!isSpreadsheetCanvas(event.target)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      };
+      const handlePointerDown = (event: PointerEvent) => {
+        pointerStart = { x: event.clientX, y: event.clientY, id: event.pointerId };
+      };
+      const handlePointerUp = (event: PointerEvent) => {
+        if (
+          pointerStart?.id === event.pointerId &&
+          isTap(pointerStart, event.clientX, event.clientY)
+        ) {
+          blockCellTap(event);
+        }
+        pointerStart = null;
+      };
+      const handleTouchStart = (event: TouchEvent) => {
+        const touch = event.touches[0];
+        touchStart = touch ? { x: touch.clientX, y: touch.clientY } : null;
+      };
+      const handleTouchEnd = (event: TouchEvent) => {
+        const touch = event.changedTouches[0];
+        if (touch && isTap(touchStart, touch.clientX, touch.clientY)) {
+          blockCellTap(event);
+        }
+        touchStart = null;
+      };
+
+      frameWindow.addEventListener("pointerdown", handlePointerDown, true);
+      frameWindow.addEventListener("pointerup", handlePointerUp, true);
+      frameWindow.addEventListener("touchstart", handleTouchStart, true);
+      frameWindow.addEventListener("touchend", handleTouchEnd, true);
+      frameWindow.addEventListener("click", blockCellTap, true);
+      frameWindow.addEventListener("dblclick", blockCellTap, true);
+      removeReadOnlySpreadsheetGuards = () => {
+        frameWindow.removeEventListener("pointerdown", handlePointerDown, true);
+        frameWindow.removeEventListener("pointerup", handlePointerUp, true);
+        frameWindow.removeEventListener("touchstart", handleTouchStart, true);
+        frameWindow.removeEventListener("touchend", handleTouchEnd, true);
+        frameWindow.removeEventListener("click", blockCellTap, true);
+        frameWindow.removeEventListener("dblclick", blockCellTap, true);
+      };
     };
 
     const commitPendingSpreadsheetEdit = () => {
@@ -401,6 +486,14 @@ export default function Page() {
         attributes: true,
         attributeFilter: ["class", "style", "aria-hidden"],
       });
+      renderedPreviewErrorObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["class", "style", "aria-hidden"],
+      });
+      removeReadOnlySpreadsheetGuards?.();
+      installReadOnlySpreadsheetTapGuard(iframe);
 
       const xhr = createXHRProxy(win.XMLHttpRequest);
       const fetchProxy = createFetchProxy(win);
@@ -605,10 +698,19 @@ export default function Page() {
       mimeType: string
     ) => {
       postBridgeMessage(BRIDGE_SOURCE_RECEIVED);
-      await server.open(new File([buffer], fileName, { type: mimeType }), {
-        fileType,
-        fileName,
-      });
+      if (mobileMode) {
+        await server.openBuffer(buffer, {
+          fileType,
+          fileName,
+          transferInput: true,
+          waitForLoad: true,
+        });
+      } else {
+        await server.open(new File([buffer], fileName, { type: mimeType }), {
+          fileType,
+          fileName,
+        });
+      }
       loadEditor();
     };
 
@@ -751,11 +853,10 @@ export default function Page() {
           return;
         }
         try {
-          // `Uint8Array.buffer` is typed as `ArrayBufferLike` by newer
-          // TypeScript versions. Copy the exact received range into a real
-          // ArrayBuffer before handing it to the document server and File API.
-          const completedBuffer = new ArrayBuffer(completedSource.buffer.byteLength);
-          new Uint8Array(completedBuffer).set(completedSource.buffer);
+          // This view was allocated with `new Uint8Array(byteLength)`, so its
+          // backing store is a real ArrayBuffer. Pass it through directly;
+          // copying it here can exhaust an Android WebView before conversion.
+          const completedBuffer = completedSource.buffer.buffer as ArrayBuffer;
           await openEmbeddedDocument(
             completedBuffer,
             completedSource.fileName,
@@ -809,6 +910,7 @@ export default function Page() {
     return () => {
       window.removeEventListener("message", handleBridgeMessage);
       renderedPreviewErrorObserver?.disconnect();
+      removeReadOnlySpreadsheetGuards?.();
       renderedPreviewErrorTimers.forEach((timer) => window.clearTimeout(timer));
       renderedPreviewErrorTimers.clear();
       server.setDownloadHandler(null);

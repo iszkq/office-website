@@ -85,6 +85,35 @@ export class EditorServer {
     };
   }
 
+  async openBuffer(
+    buffer: ArrayBuffer,
+    {
+      fileType,
+      fileName,
+      transferInput = false,
+      waitForLoad = false,
+    }: {
+      fileType?: string;
+      fileName: string;
+      transferInput?: boolean;
+      waitForLoad?: boolean;
+    }
+  ) {
+    this.fileType = fileType || getFileExt(fileName) || "docx";
+    const documentType = getDocumentType(this.fileType);
+    this.id = randomId();
+    this.file = null;
+    this.title = fileName;
+    const loadPromise = this.loadDocument(buffer, this.fileType, transferInput);
+    this.loadPromise = loadPromise;
+    if (waitForLoad) await loadPromise;
+
+    return {
+      id: this.id,
+      documentType,
+    };
+  }
+
   openNew(fileType?: string) {
     this.fileType = fileType || "docx";
     // TODO: should generate new id?
@@ -167,7 +196,8 @@ export class EditorServer {
 
   private async loadDocument(
     buffer: ArrayBuffer | (() => Promise<ArrayBuffer>),
-    fileType: string
+    fileType: string,
+    transferInput = false
   ) {
     if (typeof buffer == "function") {
       buffer = await buffer();
@@ -181,6 +211,7 @@ export class EditorServer {
     } else {
       const result = await converter.convert({
         data: buffer,
+        transferInput,
         fileFrom: "doc." + fileType,
         fileTo: "Editor.bin",
       });

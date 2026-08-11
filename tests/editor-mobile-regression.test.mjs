@@ -8,6 +8,8 @@ const readSource = (relativePath) =>
 test("mobile previews stay responsive while Community Edition editing uses the desktop engine", async () => {
   const editorSource = await readSource("app/editor/page.tsx");
   const layoutSource = await readSource("app/layout.tsx");
+  const serverSource = await readSource("utils/editor/server.ts");
+  const converterSource = await readSource("utils/editor/x2t.ts");
 
   assert.match(
     editorSource,
@@ -36,12 +38,24 @@ test("mobile previews stay responsive while Community Edition editing uses the d
   assert.match(editorSource, /protocolVersion: BRIDGE_PROTOCOL_VERSION/);
   assert.match(editorSource, /buffer: new Uint8Array\(byteLength\)/);
   assert.match(editorSource, /receivedChunks: new Uint8Array\(chunkCount\)/);
+  assert.match(editorSource, /completedSource\.buffer\.buffer as ArrayBuffer/);
+  assert.doesNotMatch(editorSource, /new Uint8Array\(completedBuffer\)\.set/);
+  assert.match(editorSource, /server\.openBuffer\(buffer/);
+  assert.match(editorSource, /transferInput: true/);
+  assert.match(editorSource, /waitForLoad: true/);
+  assert.match(serverSource, /async openBuffer\(/);
+  assert.match(serverSource, /this\.loadDocument\(buffer, this\.fileType, transferInput\)/);
+  assert.match(converterSource, /transferInput \? data : data\.slice\(0\)/);
   assert.match(editorSource, /attributes: true/);
+  assert.match(editorSource, /renderedPreviewErrorObserver\.observe\(document\.body/);
   assert.match(editorSource, /scheduleRenderedPreviewErrorDismissal/);
   assert.match(editorSource, /Chunked document transfer is incomplete/);
   assert.match(editorSource, /dismissRenderedMobileSpreadsheetError/);
   assert.match(editorSource, /embeddedDocumentReady/);
   assert.match(editorSource, /activeDocumentType === DocumentType\.Cell/);
+  assert.match(editorSource, /installReadOnlySpreadsheetTapGuard/);
+  assert.match(editorSource, /ws-canvas-overlay/);
+  assert.match(editorSource, /event\.stopImmediatePropagation\(\)/);
   assert.match(editorSource, /non-fatal mobile spreadsheet preview error/);
   assert.match(editorSource, /Failed to initialize the document editor/);
   assert.match(editorSource, /Failed to load the document editor assets/);
@@ -79,6 +93,6 @@ test("the mobile fixes publish under a new immutable Office image tag", async ()
     ".github/workflows/build-office-image.yml"
   );
 
-  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-5/);
-  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-[1234]/);
+  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-6/);
+  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-[12345]/);
 });

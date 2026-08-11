@@ -132,6 +132,7 @@ export class X2tConverter {
    */
   public async convert({
     data,
+    transferInput,
     fileFrom,
     fileTo,
     media,
@@ -147,11 +148,13 @@ export class X2tConverter {
       );
     };
 
-    // Clone ArrayBuffer since it will be transferred
-    const dataClone = data.slice(0);
+    // Desktop callers keep the historical clone. Mobile embedded previews can
+    // transfer their one-shot input directly to avoid another full-document
+    // allocation in memory-constrained WebViews.
+    const dataForWorker = transferInput ? data : data.slice(0);
 
     const payload = {
-      data: dataClone,
+      data: dataForWorker,
       fileFrom,
       fileTo,
       media: cloneMap(media),
