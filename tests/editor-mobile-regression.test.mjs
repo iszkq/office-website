@@ -95,4 +95,12 @@ test("the mobile fixes publish under a new immutable Office image tag", async ()
 
   assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-6/);
   assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-[12345]/);
+  assert.match(workflowSource, /load: true/);
+  assert.match(workflowSource, /push: false/);
+  assert.match(workflowSource, /cache-from: type=gha,scope=xinghuo-office-9\.4/);
+  assert.match(workflowSource, /cache-to: type=gha,mode=min/);
+  assert.match(workflowSource, /provenance: false/);
+  assert.match(workflowSource, /sbom: false/);
+  assert.doesNotMatch(workflowSource, /docker pull "\$IMAGE_REF"/);
+  assert.match(workflowSource, /docker push "\$IMAGE_REF"/);
 });
