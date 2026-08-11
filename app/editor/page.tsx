@@ -11,7 +11,7 @@ import {
 import io, { MockSocket } from "@/utils/editor/socket";
 import { createFetchProxy } from "@/utils/editor/fetch";
 import { createXHRProxy } from "@/utils/editor/xhr";
-import { DocEditor } from "@/utils/editor/types";
+import { DocEditor, DocumentType } from "@/utils/editor/types";
 
 const BRIDGE_READY = "xinghuo-office-ready";
 const BRIDGE_OPEN = "xinghuo-office-open";
@@ -31,6 +31,14 @@ const MIME_TYPES: Record<string, string> = {
   ppt: "application/vnd.ms-powerpoint",
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   pdf: "application/pdf",
+};
+
+type SpreadsheetEditorWindow = Window & {
+  Asc?: {
+    editor?: {
+      asc_closeCellEditor?: (cancel?: boolean) => boolean;
+    };
+  };
 };
 
 export default function Page() {
@@ -100,16 +108,41 @@ export default function Page() {
       );
     };
 
+    const commitPendingSpreadsheetEdit = () => {
+      if (
+        getDocumentType(server.getDocument().fileType) !== DocumentType.Cell
+      ) {
+        return;
+      }
+
+      const iframe = document.querySelector<HTMLIFrameElement>(
+        'iframe[name="frameEditor"]'
+      );
+      const spreadsheetApi = (iframe?.contentWindow as SpreadsheetEditorWindow)
+        ?.Asc?.editor;
+      if (typeof spreadsheetApi?.asc_closeCellEditor !== "function") {
+        throw new Error("Spreadsheet editor API is not ready");
+      }
+
+      // OnlyOffice keeps the value being typed in a temporary cell editor
+      // until the edit is explicitly closed. Exporting before this call would
+      // save the previous cell value when Ctrl/Cmd+S is pressed mid-entry.
+      if (spreadsheetApi.asc_closeCellEditor() === false) {
+        throw new Error("The active spreadsheet cell could not be committed");
+      }
+    };
+
     const requestExport = (saveId?: string) => {
       if (!bridgeEnabled || !editor || saveInProgress) return;
-      saveInProgress = true;
-      activeSaveId = saveId;
-      postBridgeMessage(BRIDGE_SAVING, { saveId });
       try {
+        commitPendingSpreadsheetEdit();
+        saveInProgress = true;
+        activeSaveId = saveId;
+        postBridgeMessage(BRIDGE_SAVING, { saveId });
         editor.downloadAs(server.getDocument().fileType);
       } catch (error) {
         saveInProgress = false;
-        const failedSaveId = activeSaveId;
+        const failedSaveId = activeSaveId ?? saveId;
         activeSaveId = undefined;
         console.error("Failed to save embedded document", error);
         postBridgeMessage(BRIDGE_ERROR, {
