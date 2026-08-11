@@ -45,12 +45,6 @@
     }
     header @next_static Cache-Control "public, max-age=31556952, immutable"
 
-    # Brotli-encoded x2t wasm
-    @x2t_wasm {
-        path /x2t/x2t.wasm
-    }
-    header @x2t_wasm Content-Encoding br
-
     # Brotli-encoded x2t versioned bundles
     @x2t_suffix {
         path /x2t-*/*

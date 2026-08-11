@@ -3,15 +3,6 @@
   "outputDirectory": "./out",
   "headers": [
     {
-      "source": "/x2t/x2t.wasm",
-      "headers": [
-        {
-          "key": "Content-Encoding",
-          "value": "br"
-        }
-      ]
-    },
-    {
       "source": "/x2t-*",
       "headers": [
         {

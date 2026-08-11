@@ -24,15 +24,6 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/x2t/x2t.wasm",
-        headers: [
-          {
-            key: "Content-Encoding",
-            value: "br",
-          },
-        ],
-      },
-      {
         source: "/x2t-:suffix/:path*",
         headers: [
           {
