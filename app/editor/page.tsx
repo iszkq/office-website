@@ -26,10 +26,34 @@ const BRIDGE_SAVE = "xinghuo-office-save";
 const BRIDGE_SAVING = "xinghuo-office-saving";
 const BRIDGE_SAVED = "xinghuo-office-saved";
 const BRIDGE_ERROR = "xinghuo-office-error";
+const BRIDGE_DIAGNOSTIC = "xinghuo-office-diagnostic";
 const BRIDGE_CANCEL_SAVE = "xinghuo-office-cancel-save";
 const BRIDGE_PROTOCOL_VERSION = 2;
 const MAX_CHUNKED_SOURCE_BYTES = 256 * 1024 * 1024;
 const MAX_CHUNK_COUNT = 4096;
+
+const summarizeDiagnosticValue = (value: unknown): string => {
+  let text: string;
+  if (value instanceof Error) {
+    text = `${value.name}: ${value.message}${value.stack ? `\n${value.stack}` : ""}`;
+  } else if (typeof value === "string") {
+    text = value;
+  } else {
+    try {
+      const candidate =
+        typeof value === "object" && value !== null && "data" in value
+          ? { data: (value as { data?: unknown }).data }
+          : value;
+      text = JSON.stringify(candidate);
+    } catch {
+      text = String(value);
+    }
+  }
+  return text
+    .replace(/(access[_-]?token|authorization|cookie|password|secret|key)=([^&\s]+)/gi, "$1=[redacted]")
+    .replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]")
+    .slice(0, 1200);
+};
 
 const MIME_TYPES: Record<string, string> = {
   doc: "application/msword",
@@ -192,6 +216,42 @@ export default function Page() {
         transfer
       );
     };
+
+    const postDiagnostic = (
+      stage: string,
+      level: "info" | "warning" | "error" = "info",
+      value?: unknown
+    ) => {
+      postBridgeMessage(BRIDGE_DIAGNOSTIC, {
+        stage,
+        level,
+        ...(value === undefined
+          ? {}
+          : { message: summarizeDiagnosticValue(value) }),
+      });
+    };
+
+    const handleDiagnosticWindowError = (event: ErrorEvent) => {
+      postDiagnostic(
+        "office_window_error",
+        "error",
+        event.error || `${event.message} (${event.lineno}:${event.colno})`
+      );
+    };
+    const handleDiagnosticUnhandledRejection = (event: PromiseRejectionEvent) => {
+      postDiagnostic("office_unhandled_rejection", "error", event.reason);
+    };
+    window.addEventListener("error", handleDiagnosticWindowError);
+    window.addEventListener(
+      "unhandledrejection",
+      handleDiagnosticUnhandledRejection
+    );
+    postDiagnostic("office_bridge_initialized", "info", {
+      online: navigator.onLine,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      mobileMode,
+      editing,
+    });
 
     const dismissRenderedMobileSpreadsheetError = () => {
       if (
@@ -528,6 +588,12 @@ export default function Page() {
       const user = server.getUser();
       const documentType = getDocumentType(doc.fileType);
       activeDocumentType = documentType;
+      postDiagnostic("onlyoffice_editor_create_start", "info", {
+        documentType,
+        fileType: doc.fileType,
+        mobileMode,
+        editing,
+      });
 
       server.setClient({
         buildVersion: window.DocsAPI!.DocEditor.version(),
@@ -583,10 +649,12 @@ export default function Page() {
         events: {
           onAppReady: async (e: unknown) => {
             console.log("App ready", e, editor);
+            postDiagnostic("onlyoffice_app_ready");
             onAppReady();
           },
           onDocumentReady: (e: unknown) => {
             console.log("Document ready", e);
+            postDiagnostic("onlyoffice_document_ready");
             embeddedDocumentReady = true;
             postBridgeMessage(BRIDGE_OPENED);
             scheduleRenderedPreviewErrorDismissal();
@@ -604,6 +672,7 @@ export default function Page() {
           },
           onError: (e: unknown) => {
             console.log("Error", e);
+            postDiagnostic("onlyoffice_error", "error", e);
             scheduleRenderedPreviewErrorDismissal();
           },
           onInfo: (e: unknown) => {
@@ -611,6 +680,7 @@ export default function Page() {
           },
           onWarning: (e: unknown) => {
             console.log("onWarning", e);
+            postDiagnostic("onlyoffice_warning", "warning", e);
           },
           onRequestSaveAs: (e: unknown) => {
             console.log("onRequestSaveAs", e);
@@ -653,6 +723,7 @@ export default function Page() {
       Object.assign(window, {
         editor,
       });
+      postDiagnostic("onlyoffice_editor_created");
       return editor;
     };
 
@@ -661,6 +732,7 @@ export default function Page() {
         createEditor();
       } catch (error) {
         console.error("Failed to create DocsAPI editor", error);
+        postDiagnostic("onlyoffice_editor_create_error", "error", error);
         postBridgeMessage(BRIDGE_ERROR, {
           message: "Failed to initialize the document editor",
         });
@@ -669,6 +741,7 @@ export default function Page() {
 
     const loadEditor = () => {
       if (window.DocsAPI && window.DocsAPI.DocEditor) {
+        postDiagnostic("onlyoffice_api_already_loaded");
         createEditorSafely();
         return;
       }
@@ -681,10 +754,12 @@ export default function Page() {
         document.head.appendChild(script);
       }
       script.onload = () => {
+        postDiagnostic("onlyoffice_api_loaded");
         createEditorSafely();
       };
       script.onerror = (e) => {
         console.error("Failed to load DocsAPI script", e);
+        postDiagnostic("onlyoffice_api_load_error", "error", e);
         postBridgeMessage(BRIDGE_ERROR, {
           message: "Failed to load the document editor assets",
         });
@@ -698,6 +773,11 @@ export default function Page() {
       mimeType: string
     ) => {
       postBridgeMessage(BRIDGE_SOURCE_RECEIVED);
+      postDiagnostic("document_conversion_start", "info", {
+        byteLength: buffer.byteLength,
+        fileType: fileType || "unknown",
+        mobileMode,
+      });
       if (mobileMode) {
         await server.openBuffer(buffer, {
           fileType,
@@ -711,6 +791,7 @@ export default function Page() {
           fileName,
         });
       }
+      postDiagnostic("document_conversion_complete");
       loadEditor();
     };
 
@@ -739,6 +820,7 @@ export default function Page() {
           );
         } catch (error) {
           console.error("Failed to open embedded document", error);
+          postDiagnostic("document_open_error", "error", error);
           postBridgeMessage(BRIDGE_ERROR, {
             message: "Failed to open the document",
           });
@@ -785,6 +867,11 @@ export default function Page() {
           receivedChunks: new Uint8Array(chunkCount),
           receivedBytes: 0,
         };
+        postDiagnostic("chunked_source_accepted", "info", {
+          byteLength,
+          chunkCount,
+          chunkSize: requestedChunkSize || null,
+        });
         return;
       }
 
@@ -840,6 +927,7 @@ export default function Page() {
       }
 
       if (event.data.type === BRIDGE_SOURCE_END) {
+        postDiagnostic("chunked_source_end_received");
         const completedSource = chunkedSource;
         chunkedSource = null;
         if (
@@ -865,6 +953,7 @@ export default function Page() {
           );
         } catch (error) {
           console.error("Failed to open chunked embedded document", error);
+          postDiagnostic("chunked_document_open_error", "error", error);
           postBridgeMessage(BRIDGE_ERROR, {
             message: "Failed to open the chunked document",
           });
@@ -893,6 +982,7 @@ export default function Page() {
 
     const init = async () => {
       if (bridgeEnabled) {
+        postDiagnostic("bridge_ready_sent");
         postBridgeMessage(BRIDGE_READY, {
           protocolVersion: BRIDGE_PROTOCOL_VERSION,
           supportsChunkedSource: true,
@@ -909,6 +999,11 @@ export default function Page() {
 
     return () => {
       window.removeEventListener("message", handleBridgeMessage);
+      window.removeEventListener("error", handleDiagnosticWindowError);
+      window.removeEventListener(
+        "unhandledrejection",
+        handleDiagnosticUnhandledRejection
+      );
       renderedPreviewErrorObserver?.disconnect();
       removeReadOnlySpreadsheetGuards?.();
       renderedPreviewErrorTimers.forEach((timer) => window.clearTimeout(timer));

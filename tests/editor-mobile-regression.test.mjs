@@ -36,6 +36,14 @@ test("mobile previews stay responsive while Community Edition editing uses the d
   assert.match(editorSource, /decodeBase64Chunk/);
   assert.match(editorSource, /supportsChunkedSource: true/);
   assert.match(editorSource, /protocolVersion: BRIDGE_PROTOCOL_VERSION/);
+  assert.match(editorSource, /BRIDGE_DIAGNOSTIC/);
+  assert.match(editorSource, /postDiagnostic\(\s*"office_window_error"/);
+  assert.match(editorSource, /postDiagnostic\("office_unhandled_rejection"/);
+  assert.match(editorSource, /postDiagnostic\("document_conversion_start"/);
+  assert.match(editorSource, /postDiagnostic\("document_conversion_complete"/);
+  assert.match(editorSource, /postDiagnostic\("onlyoffice_error"/);
+  assert.match(editorSource, /postDiagnostic\("onlyoffice_document_ready"/);
+  assert.match(editorSource, /summarizeDiagnosticValue/);
   assert.match(editorSource, /buffer: new Uint8Array\(byteLength\)/);
   assert.match(editorSource, /receivedChunks: new Uint8Array\(chunkCount\)/);
   assert.match(editorSource, /completedSource\.buffer\.buffer as ArrayBuffer/);
@@ -93,8 +101,8 @@ test("the mobile fixes publish under a new immutable Office image tag", async ()
     ".github/workflows/build-office-image.yml"
   );
 
-  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-6/);
-  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-[12345]/);
+  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-7/);
+  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-[123456]/);
   assert.match(workflowSource, /load: true/);
   assert.match(workflowSource, /push: false/);
   assert.match(workflowSource, /cache-from: type=gha,scope=xinghuo-office-9\.4/);
