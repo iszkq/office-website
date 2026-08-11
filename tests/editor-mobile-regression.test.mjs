@@ -41,6 +41,11 @@ test("mobile previews stay responsive while Community Edition editing uses the d
   assert.match(editorSource, /postDiagnostic\("office_unhandled_rejection"/);
   assert.match(editorSource, /postDiagnostic\("document_conversion_start"/);
   assert.match(editorSource, /postDiagnostic\("document_conversion_complete"/);
+  assert.match(editorSource, /const ensureEditorApiLoaded/);
+  assert.match(editorSource, /onlyoffice_api_preload_start/);
+  assert.match(editorSource, /onlyoffice_api_preload_complete/);
+  assert.match(editorSource, /script\.fetchPriority = "high"/);
+  assert.match(editorSource, /void ensureEditorApiLoaded\(\)\.catch/);
   assert.match(editorSource, /postDiagnostic\("onlyoffice_error"/);
   assert.match(editorSource, /postDiagnostic\("onlyoffice_document_ready"/);
   assert.match(editorSource, /summarizeDiagnosticValue/);

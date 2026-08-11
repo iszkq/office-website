@@ -739,31 +739,65 @@ export default function Page() {
       }
     };
 
+    let editorApiPromise: Promise<void> | null = null;
+    const ensureEditorApiLoaded = (): Promise<void> => {
+      if (window.DocsAPI?.DocEditor) {
+        return Promise.resolve();
+      }
+      if (editorApiPromise) return editorApiPromise;
+
+      postDiagnostic("onlyoffice_api_preload_start");
+      editorApiPromise = new Promise<void>((resolve, reject) => {
+        let script = document.querySelector<HTMLScriptElement>(
+          `script[src="${apiUrl}"]`
+        );
+        if (!script) {
+          script = document.createElement("script");
+          script.src = apiUrl;
+          script.async = true;
+          script.fetchPriority = "high";
+        }
+
+        const handleLoad = () => {
+          if (!window.DocsAPI?.DocEditor) {
+            script.remove();
+            editorApiPromise = null;
+            reject(new Error("DocsAPI did not initialize after api.js loaded"));
+            return;
+          }
+          postDiagnostic("onlyoffice_api_preload_complete");
+          resolve();
+        };
+        const handleError = (event: Event | string) => {
+          script.remove();
+          editorApiPromise = null;
+          reject(event);
+        };
+        script.addEventListener("load", handleLoad, { once: true });
+        script.addEventListener("error", handleError, { once: true });
+        if (!script.isConnected) document.head.appendChild(script);
+      });
+      return editorApiPromise;
+    };
+
     const loadEditor = () => {
-      if (window.DocsAPI && window.DocsAPI.DocEditor) {
-        postDiagnostic("onlyoffice_api_already_loaded");
-        createEditorSafely();
-        return;
-      }
-      let script = document.querySelector<HTMLScriptElement>(
-        `script[src="${apiUrl}"]`
-      );
-      if (!script) {
-        script = document.createElement("script");
-        script.src = apiUrl;
-        document.head.appendChild(script);
-      }
-      script.onload = () => {
-        postDiagnostic("onlyoffice_api_loaded");
-        createEditorSafely();
-      };
-      script.onerror = (e) => {
-        console.error("Failed to load DocsAPI script", e);
-        postDiagnostic("onlyoffice_api_load_error", "error", e);
-        postBridgeMessage(BRIDGE_ERROR, {
-          message: "Failed to load the document editor assets",
+      const alreadyLoaded = Boolean(window.DocsAPI?.DocEditor);
+      void ensureEditorApiLoaded()
+        .then(() => {
+          postDiagnostic(
+            alreadyLoaded
+              ? "onlyoffice_api_already_loaded"
+              : "onlyoffice_api_loaded"
+          );
+          createEditorSafely();
+        })
+        .catch((error) => {
+          console.error("Failed to load DocsAPI script", error);
+          postDiagnostic("onlyoffice_api_load_error", "error", error);
+          postBridgeMessage(BRIDGE_ERROR, {
+            message: "Failed to load the document editor assets",
+          });
         });
-      };
     };
 
     const openEmbeddedDocument = async (
@@ -982,6 +1016,12 @@ export default function Page() {
 
     const init = async () => {
       if (bridgeEnabled) {
+        // Download and execute the editor API while the host downloads and
+        // transfers the source file and while x2t converts it.  Previously
+        // these network and CPU phases ran one after another on mobile.
+        void ensureEditorApiLoaded().catch((error) => {
+          postDiagnostic("onlyoffice_api_preload_error", "warning", error);
+        });
         postDiagnostic("bridge_ready_sent");
         postBridgeMessage(BRIDGE_READY, {
           protocolVersion: BRIDGE_PROTOCOL_VERSION,
