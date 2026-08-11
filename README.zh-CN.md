@@ -28,7 +28,7 @@ caddy:2-alpine
 docker build \
   --build-arg DS_VERSION=9.4.0.1 \
   --build-arg HASH=1 \
-  -t xinghuo-office:9.4.0.1-1 \
+  -t xinghuo-office:9.4.0.1-2 \
   .
 ```
 
@@ -41,7 +41,7 @@ docker run -d \
   --name xinghuo-office \
   --restart unless-stopped \
   -p 127.0.0.1:18080:80 \
-  xinghuo-office:9.4.0.1-1
+  xinghuo-office:9.4.0.1-2
 ```
 
 ## 1Panel 编排
@@ -51,7 +51,7 @@ docker run -d \
 ```yaml
 services:
   office:
-    image: xinghuo-office:9.4.0.1-1
+    image: xinghuo-office:9.4.0.1-2
     container_name: xinghuo-office
     restart: unless-stopped
     ports:

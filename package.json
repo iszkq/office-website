@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build && node scripts/verify-self-hosted.mjs out",
+    "test": "node --test tests/*.test.mjs",
     "start": "next start",
     "lint": "eslint",
     "svgr": "npx @svgr/cli --out-dir components/svg --typescript -- public/svg",

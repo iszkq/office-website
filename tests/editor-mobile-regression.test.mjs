@@ -1,0 +1,44 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+const readSource = (relativePath) =>
+  readFile(new URL(`../${relativePath}`, import.meta.url), "utf8");
+
+test("embedded Office uses the supported mobile editor and tracks the keyboard viewport", async () => {
+  const editorSource = await readSource("app/editor/page.tsx");
+  const layoutSource = await readSource("app/layout.tsx");
+
+  assert.match(editorSource, /searchParams\.get\("mobile"\) === "1"/);
+  assert.match(editorSource, /type: mobileMode \? "mobile" : "desktop"/);
+  assert.match(editorSource, /compactToolbar,/);
+  assert.match(editorSource, /window\.visualViewport\?\.height/);
+  assert.match(editorSource, /--office-viewport-height/);
+  assert.match(layoutSource, /interactiveWidget: "resizes-content"/);
+});
+
+test("saving commits spreadsheet input and releases mobile keyboard focus", async () => {
+  const source = await readSource("app/editor/page.tsx");
+  const requestExportStart = source.indexOf("const requestExport =");
+  const requestExportEnd = source.indexOf("const resetEditorModifiedState", requestExportStart);
+  const requestExportSource = source.slice(requestExportStart, requestExportEnd);
+
+  assert.match(source, /asc_closeCellEditor/);
+  assert.match(source, /editor\?\.blurFocus\?\.\(\{\}\)/);
+  assert.match(source, /activeElement instanceof HTMLElement/);
+  assert.match(requestExportSource, /commitPendingSpreadsheetEdit\(\)/);
+  assert.match(requestExportSource, /releaseEditorFocus\(\)/);
+  assert.ok(
+    requestExportSource.indexOf("commitPendingSpreadsheetEdit()") <
+      requestExportSource.indexOf("editor.downloadAs")
+  );
+});
+
+test("the mobile fixes publish under a new immutable Office image tag", async () => {
+  const workflowSource = await readSource(
+    ".github/workflows/build-office-image.yml"
+  );
+
+  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-2/);
+  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-1/);
+});

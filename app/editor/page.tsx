@@ -41,12 +41,42 @@ type SpreadsheetEditorWindow = Window & {
   };
 };
 
+const getEditorFrame = () =>
+  document.querySelector<HTMLIFrameElement>('iframe[name="frameEditor"]');
+
 export default function Page() {
   const server = useAppStore((state) => state.server);
   const language = useResolvedLanguage();
   const theme = useAppStore((state) => state.theme);
   const hasHydrated = useHasHydrated();
   const isDirty = useRef(false);
+
+  useEffect(() => {
+    const updateViewportHeight = () => {
+      const height = Math.round(window.visualViewport?.height ?? window.innerHeight);
+      document.documentElement.style.setProperty("--office-viewport-height", `${height}px`);
+    };
+
+    updateViewportHeight();
+    window.addEventListener("resize", updateViewportHeight, { passive: true });
+    window.addEventListener("orientationchange", updateViewportHeight, {
+      passive: true,
+    });
+    window.visualViewport?.addEventListener("resize", updateViewportHeight, {
+      passive: true,
+    });
+    window.visualViewport?.addEventListener("scroll", updateViewportHeight, {
+      passive: true,
+    });
+
+    return () => {
+      window.removeEventListener("resize", updateViewportHeight);
+      window.removeEventListener("orientationchange", updateViewportHeight);
+      window.visualViewport?.removeEventListener("resize", updateViewportHeight);
+      window.visualViewport?.removeEventListener("scroll", updateViewportHeight);
+      document.documentElement.style.removeProperty("--office-viewport-height");
+    };
+  }, []);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -71,6 +101,13 @@ export default function Page() {
     const paramEditing = searchParams.get("editing");
     const paramLang = searchParams.get("lang");
     const paramTheme = searchParams.get("theme");
+    const mobileMode =
+      searchParams.get("mobile") === "1" ||
+      window.matchMedia(
+        "(max-width: 750px), (max-height: 520px) and (pointer: coarse)"
+      ).matches;
+    const compactToolbar =
+      searchParams.get("compactToolbar") === "1" || mobileMode;
     const embedded = searchParams.get("embed") === "1";
     const requestId = searchParams.get("requestId");
     const requestedParentOrigin = searchParams.get("parentOrigin");
@@ -115,9 +152,7 @@ export default function Page() {
         return;
       }
 
-      const iframe = document.querySelector<HTMLIFrameElement>(
-        'iframe[name="frameEditor"]'
-      );
+      const iframe = getEditorFrame();
       const spreadsheetApi = (iframe?.contentWindow as SpreadsheetEditorWindow)
         ?.Asc?.editor;
       if (typeof spreadsheetApi?.asc_closeCellEditor !== "function") {
@@ -132,10 +167,24 @@ export default function Page() {
       }
     };
 
+    const releaseEditorFocus = () => {
+      try {
+        editor?.blurFocus?.({});
+      } catch (error) {
+        console.warn("Failed to release the public Office focus", error);
+      }
+
+      const iframe = getEditorFrame();
+      const activeElement = iframe?.contentDocument?.activeElement;
+      if (activeElement instanceof HTMLElement) activeElement.blur();
+      iframe?.blur();
+    };
+
     const requestExport = (saveId?: string) => {
       if (!bridgeEnabled || !editor || saveInProgress) return;
       try {
         commitPendingSpreadsheetEdit();
+        releaseEditorFocus();
         saveInProgress = true;
         activeSaveId = saveId;
         postBridgeMessage(BRIDGE_SAVING, { saveId });
@@ -193,9 +242,7 @@ export default function Page() {
     MockSocket.on("disconnect", server.handleDisconnect);
 
     const onAppReady = () => {
-      const iframe = document.querySelector<HTMLIFrameElement>(
-        'iframe[name="frameEditor"]'
-      );
+      const iframe = getEditorFrame();
       const win = iframe?.contentWindow as typeof window;
       const iframeDoc = iframe?.contentDocument;
       if (!iframeDoc || !win) {
@@ -276,6 +323,7 @@ export default function Page() {
           },
           customization: {
             uiTheme: uiTheme,
+            compactToolbar,
             features: {
               spellcheck: {
                 change: false,
@@ -348,7 +396,7 @@ export default function Page() {
             }
           },
         },
-        type: "desktop",
+        type: mobileMode ? "mobile" : "desktop",
         width: "100%",
         height: "100%",
       });
@@ -463,7 +511,10 @@ export default function Page() {
   return (
     <>
       <div>
-        <div className="w-screen h-screen">
+        <div
+          className="w-screen overflow-hidden"
+          style={{ height: "var(--office-viewport-height, 100dvh)" }}
+        >
           <div id="placeholder">
             <iframe
               className="w-0 h-0 hidden"
