@@ -20,6 +20,11 @@ test("mobile previews stay responsive while Community Edition editing uses the d
   );
   assert.match(
     editorSource,
+    /mode: editing && doc\.fileType !== "pdf" \? "edit" : "view"/
+  );
+  assert.match(editorSource, /forceView: !editing/);
+  assert.match(
+    editorSource,
     /Community Edition intentionally disables editing/
   );
   assert.match(editorSource, /BRIDGE_SOURCE_RECEIVED/);
@@ -27,10 +32,16 @@ test("mobile previews stay responsive while Community Edition editing uses the d
   assert.match(editorSource, /BRIDGE_SOURCE_BEGIN/);
   assert.match(editorSource, /BRIDGE_SOURCE_CHUNK_RECEIVED/);
   assert.match(editorSource, /decodeBase64Chunk/);
+  assert.match(editorSource, /supportsChunkedSource: true/);
+  assert.match(editorSource, /protocolVersion: BRIDGE_PROTOCOL_VERSION/);
+  assert.match(editorSource, /buffer: new Uint8Array\(byteLength\)/);
+  assert.match(editorSource, /receivedChunks: new Uint8Array\(chunkCount\)/);
+  assert.match(editorSource, /attributes: true/);
+  assert.match(editorSource, /scheduleRenderedPreviewErrorDismissal/);
   assert.match(editorSource, /Chunked document transfer is incomplete/);
   assert.match(editorSource, /dismissRenderedMobileSpreadsheetError/);
   assert.match(editorSource, /embeddedDocumentReady/);
-  assert.match(editorSource, /activeDocumentType !== DocumentType\.Cell/);
+  assert.match(editorSource, /activeDocumentType === DocumentType\.Cell/);
   assert.match(editorSource, /non-fatal mobile spreadsheet preview error/);
   assert.match(editorSource, /Failed to initialize the document editor/);
   assert.match(editorSource, /Failed to load the document editor assets/);
@@ -68,6 +79,6 @@ test("the mobile fixes publish under a new immutable Office image tag", async ()
     ".github/workflows/build-office-image.yml"
   );
 
-  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-4/);
-  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-[123]/);
+  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-5/);
+  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-[1234]/);
 });

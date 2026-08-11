@@ -27,6 +27,7 @@ const BRIDGE_SAVING = "xinghuo-office-saving";
 const BRIDGE_SAVED = "xinghuo-office-saved";
 const BRIDGE_ERROR = "xinghuo-office-error";
 const BRIDGE_CANCEL_SAVE = "xinghuo-office-cancel-save";
+const BRIDGE_PROTOCOL_VERSION = 2;
 const MAX_CHUNKED_SOURCE_BYTES = 256 * 1024 * 1024;
 const MAX_CHUNK_COUNT = 4096;
 
@@ -54,7 +55,9 @@ type ChunkedSource = {
   mimeType: string;
   byteLength: number;
   chunkCount: number;
-  chunks: Array<Uint8Array | undefined>;
+  chunkSize?: number;
+  buffer: Uint8Array;
+  receivedChunks: Uint8Array;
   receivedBytes: number;
 };
 
@@ -174,6 +177,7 @@ export default function Page() {
     let embeddedDocumentReady = false;
     let activeDocumentType: DocumentType | null = null;
     let renderedPreviewErrorObserver: MutationObserver | null = null;
+    const renderedPreviewErrorTimers = new Set<number>();
 
     const postBridgeMessage = (
       type: string,
@@ -193,38 +197,84 @@ export default function Page() {
         !bridgeEnabled ||
         editing ||
         !mobileMode ||
-        !embeddedDocumentReady ||
-        activeDocumentType !== DocumentType.Cell
+        !embeddedDocumentReady
       ) {
         return;
       }
 
       const iframeDoc = getEditorFrame()?.contentDocument;
       if (!iframeDoc) return;
-      const dialogs = Array.from(
-        iframeDoc.querySelectorAll<HTMLElement>('[role="dialog"], .asc-window')
-      );
-      const processingError = dialogs.find((dialog) =>
-        /在处理此文档时发生了错误|error occurred while (?:processing|working with) (?:this|the) document/i.test(
-          dialog.textContent || ""
-        )
-      );
-      if (!processingError) return;
 
-      const actions = Array.from(
-        processingError.querySelectorAll<HTMLElement>(
-          'button, [role="button"], .asc-button'
+      const processingErrorPattern =
+        /在处理此文档时发生了错误|error occurred while (?:processing|working with) (?:this|the) document/i;
+      const communityNoticePattern =
+        /使用免费的社区版本|要访问移动web编辑器，需要商业许可证|using the free community version|mobile web editors?,? a commercial license is required/i;
+      const isProcessingError = activeDocumentType === DocumentType.Cell;
+      const dialogCandidates = Array.from(
+        iframeDoc.querySelectorAll<HTMLElement>(
+          '[role="dialog"], .asc-window, .asc-popup, .dialog, .modal, .popup, [class*="dialog"], [class*="modal"], [class*="popup"]'
         )
       );
-      const confirmAction = actions.find((action) =>
-        /^(?:确定|好|OK)$/i.test((action.textContent || "").trim())
+      const findMatchingDialog = (pattern: RegExp) =>
+        dialogCandidates.find((dialog) => pattern.test(dialog.textContent || ""));
+      const processingError = isProcessingError
+        ? findMatchingDialog(processingErrorPattern)
+        : undefined;
+      const communityNotice = findMatchingDialog(communityNoticePattern);
+      const targetDialog = processingError || communityNotice;
+      if (!targetDialog) return;
+
+      const actionPattern = /^(?:确定|好|关闭|OK|Close)$/i;
+      const actions = Array.from(
+        targetDialog.querySelectorAll<HTMLElement>(
+          'button, [role="button"], .asc-button, input[type="button"], input[type="submit"]'
+        )
       );
+      let confirmAction = actions.find((action) =>
+        actionPattern.test((action.textContent || (action as HTMLInputElement).value || "").trim())
+      );
+      if (!confirmAction) {
+        const allActions = Array.from(
+          iframeDoc.querySelectorAll<HTMLElement>(
+            'button, [role="button"], .asc-button, input[type="button"], input[type="submit"]'
+          )
+        );
+        confirmAction = allActions.find((action) => {
+          if (
+            !actionPattern.test(
+              (action.textContent || (action as HTMLInputElement).value || "").trim()
+            )
+          ) {
+            return false;
+          }
+          let parent: HTMLElement | null = action.parentElement;
+          for (let depth = 0; parent && depth < 8; depth += 1) {
+            if (processingErrorPattern.test(parent.textContent || "") || communityNoticePattern.test(parent.textContent || "")) {
+              return true;
+            }
+            parent = parent.parentElement;
+          }
+          return false;
+        });
+      }
       if (!confirmAction) return;
 
       console.warn(
-        "Dismissed a non-fatal mobile spreadsheet preview error after the document rendered"
+        processingError
+          ? "Dismissed a non-fatal mobile spreadsheet preview error after the document rendered"
+          : "Dismissed the Community mobile preview notice in read-only mode"
       );
       confirmAction.click();
+    };
+
+    const scheduleRenderedPreviewErrorDismissal = () => {
+      [0, 100, 250, 500, 1000, 2000, 4000].forEach((delay) => {
+        const timer = window.setTimeout(() => {
+          renderedPreviewErrorTimers.delete(timer);
+          dismissRenderedMobileSpreadsheetError();
+        }, delay);
+        renderedPreviewErrorTimers.add(timer);
+      });
     };
 
     const commitPendingSpreadsheetEdit = () => {
@@ -343,11 +393,13 @@ export default function Page() {
 
       renderedPreviewErrorObserver?.disconnect();
       renderedPreviewErrorObserver = new MutationObserver(() => {
-        window.setTimeout(dismissRenderedMobileSpreadsheetError, 0);
+        scheduleRenderedPreviewErrorDismissal();
       });
       renderedPreviewErrorObserver.observe(iframeDoc.body, {
         childList: true,
         subtree: true,
+        attributes: true,
+        attributeFilter: ["class", "style", "aria-hidden"],
       });
 
       const xhr = createXHRProxy(win.XMLHttpRequest);
@@ -405,6 +457,10 @@ export default function Page() {
         },
         documentType: documentType,
         editorConfig: {
+          // A read-only mobile preview must be a real view session. Relying
+          // only on permissions.edit still lets Community mobile bundles
+          // initialize their edit/license path and show a warning dialog.
+          mode: editing && doc.fileType !== "pdf" ? "edit" : "view",
           lang: lang,
           coEditing: {
             mode: "fast",
@@ -416,6 +472,9 @@ export default function Page() {
           customization: {
             uiTheme: uiTheme,
             compactToolbar,
+            mobile: {
+              forceView: !editing,
+            },
             features: {
               spellcheck: {
                 change: false,
@@ -437,7 +496,7 @@ export default function Page() {
             console.log("Document ready", e);
             embeddedDocumentReady = true;
             postBridgeMessage(BRIDGE_OPENED);
-            window.setTimeout(dismissRenderedMobileSpreadsheetError, 0);
+            scheduleRenderedPreviewErrorDismissal();
           },
           onDocumentStateChange: (e: { data: boolean; target: unknown }) => {
             console.log("Document state change", e);
@@ -452,7 +511,7 @@ export default function Page() {
           },
           onError: (e: unknown) => {
             console.log("Error", e);
-            window.setTimeout(dismissRenderedMobileSpreadsheetError, 0);
+            scheduleRenderedPreviewErrorDismissal();
           },
           onInfo: (e: unknown) => {
             console.log("Info", e);
@@ -588,6 +647,7 @@ export default function Page() {
       if (event.data.type === BRIDGE_SOURCE_BEGIN) {
         const { fileName, fileType, mimeType, byteLength, chunkCount } =
           event.data;
+        const requestedChunkSize = event.data.chunkSize;
         if (
           typeof fileName !== "string" ||
           typeof byteLength !== "number" ||
@@ -597,7 +657,11 @@ export default function Page() {
           typeof chunkCount !== "number" ||
           !Number.isSafeInteger(chunkCount) ||
           chunkCount <= 0 ||
-          chunkCount > MAX_CHUNK_COUNT
+          chunkCount > MAX_CHUNK_COUNT ||
+          (requestedChunkSize !== undefined &&
+            (!Number.isSafeInteger(requestedChunkSize) ||
+              requestedChunkSize <= 0 ||
+              requestedChunkSize > 256 * 1024))
         ) {
           chunkedSource = null;
           postBridgeMessage(BRIDGE_ERROR, {
@@ -614,7 +678,9 @@ export default function Page() {
               : "application/octet-stream",
           byteLength,
           chunkCount,
-          chunks: new Array(chunkCount),
+          chunkSize: requestedChunkSize,
+          buffer: new Uint8Array(byteLength),
+          receivedChunks: new Uint8Array(chunkCount),
           receivedBytes: 0,
         };
         return;
@@ -636,9 +702,28 @@ export default function Page() {
           return;
         }
         try {
-          if (!chunkedSource.chunks[chunkIndex]) {
+          if (!chunkedSource.receivedChunks[chunkIndex]) {
             const bytes = decodeBase64Chunk(chunkData);
-            chunkedSource.chunks[chunkIndex] = bytes;
+            if (!chunkedSource.chunkSize) {
+              if (chunkIndex !== 0) {
+                throw new Error("The first document chunk was not received");
+              }
+              chunkedSource.chunkSize = bytes.byteLength;
+            }
+            const offset = chunkIndex * chunkedSource.chunkSize;
+            const expectedLength =
+              chunkIndex === chunkedSource.chunkCount - 1
+                ? chunkedSource.byteLength - offset
+                : chunkedSource.chunkSize;
+            if (
+              expectedLength <= 0 ||
+              bytes.byteLength !== expectedLength ||
+              offset + bytes.byteLength > chunkedSource.byteLength
+            ) {
+              throw new Error("Invalid document chunk size");
+            }
+            chunkedSource.buffer.set(bytes, offset);
+            chunkedSource.receivedChunks[chunkIndex] = 1;
             chunkedSource.receivedBytes += bytes.byteLength;
           }
           postBridgeMessage(BRIDGE_SOURCE_CHUNK_RECEIVED, { chunkIndex });
@@ -658,7 +743,7 @@ export default function Page() {
         if (
           !completedSource ||
           completedSource.receivedBytes !== completedSource.byteLength ||
-          completedSource.chunks.some((chunk) => !chunk)
+          completedSource.receivedChunks.some((received) => !received)
         ) {
           postBridgeMessage(BRIDGE_ERROR, {
             message: "Chunked document transfer is incomplete",
@@ -666,15 +751,8 @@ export default function Page() {
           return;
         }
         try {
-          const joined = new Uint8Array(completedSource.byteLength);
-          let offset = 0;
-          for (const chunk of completedSource.chunks) {
-            if (!chunk) throw new Error("Missing document chunk");
-            joined.set(chunk, offset);
-            offset += chunk.byteLength;
-          }
           await openEmbeddedDocument(
-            joined.buffer,
+            completedSource.buffer.buffer,
             completedSource.fileName,
             completedSource.fileType,
             completedSource.mimeType
@@ -709,7 +787,10 @@ export default function Page() {
 
     const init = async () => {
       if (bridgeEnabled) {
-        postBridgeMessage(BRIDGE_READY);
+        postBridgeMessage(BRIDGE_READY, {
+          protocolVersion: BRIDGE_PROTOCOL_VERSION,
+          supportsChunkedSource: true,
+        });
         return;
       }
       if (newDoc) {
@@ -723,6 +804,8 @@ export default function Page() {
     return () => {
       window.removeEventListener("message", handleBridgeMessage);
       renderedPreviewErrorObserver?.disconnect();
+      renderedPreviewErrorTimers.forEach((timer) => window.clearTimeout(timer));
+      renderedPreviewErrorTimers.clear();
       server.setDownloadHandler(null);
       MockSocket.off("connect", server.handleConnect);
       MockSocket.off("disconnect", server.handleDisconnect);
