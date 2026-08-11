@@ -15,6 +15,10 @@ import { DocEditor, DocumentType } from "@/utils/editor/types";
 
 const BRIDGE_READY = "xinghuo-office-ready";
 const BRIDGE_OPEN = "xinghuo-office-open";
+const BRIDGE_SOURCE_BEGIN = "xinghuo-office-source-begin";
+const BRIDGE_SOURCE_CHUNK = "xinghuo-office-source-chunk";
+const BRIDGE_SOURCE_CHUNK_RECEIVED = "xinghuo-office-source-chunk-received";
+const BRIDGE_SOURCE_END = "xinghuo-office-source-end";
 const BRIDGE_SOURCE_RECEIVED = "xinghuo-office-source-received";
 const BRIDGE_OPENED = "xinghuo-office-opened";
 const BRIDGE_DIRTY = "xinghuo-office-dirty";
@@ -23,6 +27,8 @@ const BRIDGE_SAVING = "xinghuo-office-saving";
 const BRIDGE_SAVED = "xinghuo-office-saved";
 const BRIDGE_ERROR = "xinghuo-office-error";
 const BRIDGE_CANCEL_SAVE = "xinghuo-office-cancel-save";
+const MAX_CHUNKED_SOURCE_BYTES = 256 * 1024 * 1024;
+const MAX_CHUNK_COUNT = 4096;
 
 const MIME_TYPES: Record<string, string> = {
   doc: "application/msword",
@@ -40,6 +46,25 @@ type SpreadsheetEditorWindow = Window & {
       asc_closeCellEditor?: (cancel?: boolean) => boolean;
     };
   };
+};
+
+type ChunkedSource = {
+  fileName: string;
+  fileType?: string;
+  mimeType: string;
+  byteLength: number;
+  chunkCount: number;
+  chunks: Array<Uint8Array | undefined>;
+  receivedBytes: number;
+};
+
+const decodeBase64Chunk = (encoded: string): Uint8Array => {
+  const binary = window.atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
 };
 
 const getEditorFrame = () =>
@@ -145,6 +170,10 @@ export default function Page() {
     let saveInProgress = false;
     let activeSaveId: string | undefined;
     let userInteracted = false;
+    let chunkedSource: ChunkedSource | null = null;
+    let embeddedDocumentReady = false;
+    let activeDocumentType: DocumentType | null = null;
+    let renderedPreviewErrorObserver: MutationObserver | null = null;
 
     const postBridgeMessage = (
       type: string,
@@ -157,6 +186,45 @@ export default function Page() {
         parentOrigin,
         transfer
       );
+    };
+
+    const dismissRenderedMobileSpreadsheetError = () => {
+      if (
+        !bridgeEnabled ||
+        editing ||
+        !mobileMode ||
+        !embeddedDocumentReady ||
+        activeDocumentType !== DocumentType.Cell
+      ) {
+        return;
+      }
+
+      const iframeDoc = getEditorFrame()?.contentDocument;
+      if (!iframeDoc) return;
+      const dialogs = Array.from(
+        iframeDoc.querySelectorAll<HTMLElement>('[role="dialog"], .asc-window')
+      );
+      const processingError = dialogs.find((dialog) =>
+        /在处理此文档时发生了错误|error occurred while (?:processing|working with) (?:this|the) document/i.test(
+          dialog.textContent || ""
+        )
+      );
+      if (!processingError) return;
+
+      const actions = Array.from(
+        processingError.querySelectorAll<HTMLElement>(
+          'button, [role="button"], .asc-button'
+        )
+      );
+      const confirmAction = actions.find((action) =>
+        /^(?:确定|好|OK)$/i.test((action.textContent || "").trim())
+      );
+      if (!confirmAction) return;
+
+      console.warn(
+        "Dismissed a non-fatal mobile spreadsheet preview error after the document rendered"
+      );
+      confirmAction.click();
     };
 
     const commitPendingSpreadsheetEdit = () => {
@@ -273,6 +341,15 @@ export default function Page() {
       iframeDoc.addEventListener("keydown", markUserInteraction, true);
       iframeDoc.addEventListener("beforeinput", markUserInteraction, true);
 
+      renderedPreviewErrorObserver?.disconnect();
+      renderedPreviewErrorObserver = new MutationObserver(() => {
+        window.setTimeout(dismissRenderedMobileSpreadsheetError, 0);
+      });
+      renderedPreviewErrorObserver.observe(iframeDoc.body, {
+        childList: true,
+        subtree: true,
+      });
+
       const xhr = createXHRProxy(win.XMLHttpRequest);
       const fetchProxy = createFetchProxy(win);
       const _Worker = win.Worker;
@@ -305,6 +382,7 @@ export default function Page() {
       const doc = server.getDocument();
       const user = server.getUser();
       const documentType = getDocumentType(doc.fileType);
+      activeDocumentType = documentType;
 
       server.setClient({
         buildVersion: window.DocsAPI!.DocEditor.version(),
@@ -357,7 +435,9 @@ export default function Page() {
           },
           onDocumentReady: (e: unknown) => {
             console.log("Document ready", e);
+            embeddedDocumentReady = true;
             postBridgeMessage(BRIDGE_OPENED);
+            window.setTimeout(dismissRenderedMobileSpreadsheetError, 0);
           },
           onDocumentStateChange: (e: { data: boolean; target: unknown }) => {
             console.log("Document state change", e);
@@ -372,6 +452,7 @@ export default function Page() {
           },
           onError: (e: unknown) => {
             console.log("Error", e);
+            window.setTimeout(dismissRenderedMobileSpreadsheetError, 0);
           },
           onInfo: (e: unknown) => {
             console.log("Info", e);
@@ -458,6 +539,20 @@ export default function Page() {
       };
     };
 
+    const openEmbeddedDocument = async (
+      buffer: ArrayBuffer,
+      fileName: string,
+      fileType: string | undefined,
+      mimeType: string
+    ) => {
+      postBridgeMessage(BRIDGE_SOURCE_RECEIVED);
+      await server.open(new File([buffer], fileName, { type: mimeType }), {
+        fileType,
+        fileName,
+      });
+      loadEditor();
+    };
+
     const handleBridgeMessage = async (event: MessageEvent) => {
       if (
         !bridgeEnabled ||
@@ -475,24 +570,119 @@ export default function Page() {
           return;
         }
         try {
-          postBridgeMessage(BRIDGE_SOURCE_RECEIVED);
-          await server.open(
-            new File([buffer], fileName, {
-              type:
-                typeof mimeType === "string"
-                  ? mimeType
-                  : "application/octet-stream",
-            }),
-            {
-              fileType: typeof fileType === "string" ? fileType : undefined,
-              fileName,
-            }
+          await openEmbeddedDocument(
+            buffer,
+            fileName,
+            typeof fileType === "string" ? fileType : undefined,
+            typeof mimeType === "string" ? mimeType : "application/octet-stream"
           );
-          loadEditor();
         } catch (error) {
           console.error("Failed to open embedded document", error);
           postBridgeMessage(BRIDGE_ERROR, {
             message: "Failed to open the document",
+          });
+        }
+        return;
+      }
+
+      if (event.data.type === BRIDGE_SOURCE_BEGIN) {
+        const { fileName, fileType, mimeType, byteLength, chunkCount } =
+          event.data;
+        if (
+          typeof fileName !== "string" ||
+          typeof byteLength !== "number" ||
+          !Number.isSafeInteger(byteLength) ||
+          byteLength <= 0 ||
+          byteLength > MAX_CHUNKED_SOURCE_BYTES ||
+          typeof chunkCount !== "number" ||
+          !Number.isSafeInteger(chunkCount) ||
+          chunkCount <= 0 ||
+          chunkCount > MAX_CHUNK_COUNT
+        ) {
+          chunkedSource = null;
+          postBridgeMessage(BRIDGE_ERROR, {
+            message: "Invalid chunked document metadata",
+          });
+          return;
+        }
+        chunkedSource = {
+          fileName,
+          fileType: typeof fileType === "string" ? fileType : undefined,
+          mimeType:
+            typeof mimeType === "string"
+              ? mimeType
+              : "application/octet-stream",
+          byteLength,
+          chunkCount,
+          chunks: new Array(chunkCount),
+          receivedBytes: 0,
+        };
+        return;
+      }
+
+      if (event.data.type === BRIDGE_SOURCE_CHUNK) {
+        const { chunkIndex, chunkData } = event.data;
+        if (
+          !chunkedSource ||
+          typeof chunkIndex !== "number" ||
+          !Number.isSafeInteger(chunkIndex) ||
+          chunkIndex < 0 ||
+          chunkIndex >= chunkedSource.chunkCount ||
+          typeof chunkData !== "string"
+        ) {
+          postBridgeMessage(BRIDGE_ERROR, {
+            message: "Invalid chunked document data",
+          });
+          return;
+        }
+        try {
+          if (!chunkedSource.chunks[chunkIndex]) {
+            const bytes = decodeBase64Chunk(chunkData);
+            chunkedSource.chunks[chunkIndex] = bytes;
+            chunkedSource.receivedBytes += bytes.byteLength;
+          }
+          postBridgeMessage(BRIDGE_SOURCE_CHUNK_RECEIVED, { chunkIndex });
+        } catch (error) {
+          console.error("Failed to decode document chunk", error);
+          chunkedSource = null;
+          postBridgeMessage(BRIDGE_ERROR, {
+            message: "Failed to decode chunked document data",
+          });
+        }
+        return;
+      }
+
+      if (event.data.type === BRIDGE_SOURCE_END) {
+        const completedSource = chunkedSource;
+        chunkedSource = null;
+        if (
+          !completedSource ||
+          completedSource.receivedBytes !== completedSource.byteLength ||
+          completedSource.chunks.some((chunk) => !chunk)
+        ) {
+          postBridgeMessage(BRIDGE_ERROR, {
+            message: "Chunked document transfer is incomplete",
+          });
+          return;
+        }
+        try {
+          const joined = new Uint8Array(completedSource.byteLength);
+          let offset = 0;
+          for (const chunk of completedSource.chunks) {
+            if (!chunk) throw new Error("Missing document chunk");
+            joined.set(chunk, offset);
+            offset += chunk.byteLength;
+          }
+          await openEmbeddedDocument(
+            joined.buffer,
+            completedSource.fileName,
+            completedSource.fileType,
+            completedSource.mimeType
+          );
+        } catch (error) {
+          console.error("Failed to open chunked embedded document", error);
+          postBridgeMessage(BRIDGE_ERROR, {
+            message: "Failed to open the chunked document",
           });
         }
         return;
@@ -532,6 +722,7 @@ export default function Page() {
 
     return () => {
       window.removeEventListener("message", handleBridgeMessage);
+      renderedPreviewErrorObserver?.disconnect();
       server.setDownloadHandler(null);
       MockSocket.off("connect", server.handleConnect);
       MockSocket.off("disconnect", server.handleDisconnect);

@@ -24,6 +24,14 @@ test("mobile previews stay responsive while Community Edition editing uses the d
   );
   assert.match(editorSource, /BRIDGE_SOURCE_RECEIVED/);
   assert.match(editorSource, /postBridgeMessage\(BRIDGE_SOURCE_RECEIVED\)/);
+  assert.match(editorSource, /BRIDGE_SOURCE_BEGIN/);
+  assert.match(editorSource, /BRIDGE_SOURCE_CHUNK_RECEIVED/);
+  assert.match(editorSource, /decodeBase64Chunk/);
+  assert.match(editorSource, /Chunked document transfer is incomplete/);
+  assert.match(editorSource, /dismissRenderedMobileSpreadsheetError/);
+  assert.match(editorSource, /embeddedDocumentReady/);
+  assert.match(editorSource, /activeDocumentType !== DocumentType\.Cell/);
+  assert.match(editorSource, /non-fatal mobile spreadsheet preview error/);
   assert.match(editorSource, /Failed to initialize the document editor/);
   assert.match(editorSource, /Failed to load the document editor assets/);
   assert.match(editorSource, /compactToolbar,/);
@@ -60,6 +68,6 @@ test("the mobile fixes publish under a new immutable Office image tag", async ()
     ".github/workflows/build-office-image.yml"
   );
 
-  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-3/);
-  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-[12]/);
+  assert.match(workflowSource, /type=raw,value=9\.4\.0\.1-4/);
+  assert.doesNotMatch(workflowSource, /type=raw,value=9\.4\.0\.1-[123]/);
 });
