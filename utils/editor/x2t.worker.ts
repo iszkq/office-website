@@ -32,8 +32,32 @@ async function initX2t(): Promise<void> {
     __filename: BASE_URL,
   });
 
-  // Load x2t script in Worker context
-  importScripts(scriptUrl);
+  // Load x2t script in Worker context.  Android WebView 103 has a known
+  // incompatibility with `importScripts()` when the response is Brotli
+  // encoded (the same file loads normally in desktop browsers).  Fetching
+  // the script first lets WebView's Fetch implementation decode the response
+  // and evaluating the decoded source keeps the fallback limited to this
+  // worker; desktop browsers still use the normal importScripts path.
+  try {
+    importScripts(scriptUrl);
+  } catch (importError) {
+    console.warn("[x2t.worker] importScripts failed; using fetch fallback", {
+      scriptUrl,
+      error: importError,
+    });
+
+    const response = await fetch(scriptUrl, { credentials: "same-origin" });
+    if (!response.ok) {
+      throw new Error(
+        `Failed to load x2t.js (${response.status} ${response.statusText})`,
+      );
+    }
+    const source = await response.text();
+    // Indirect eval executes as a classic global script, matching the
+    // semantics of importScripts() so the Emscripten `Module` object is
+    // exposed on the WorkerGlobalScope.
+    (0, eval)(`${source}\n//# sourceURL=${scriptUrl}`);
+  }
 
   x2t = (self as any).Module;
 
