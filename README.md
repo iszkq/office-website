@@ -1,20 +1,20 @@
-# Xinghuo Office
+# 星火 Office
 
-A self-hosted, browser-local Office editor for DOCX, XLSX, and PPTX files.
+这是一个支持 DOCX、XLSX、PPTX 的自托管浏览器 Office 编辑器。
 
-Documents are passed to the editor in browser memory and processed locally with ONLYOFFICE Web Apps and x2t WebAssembly. The production image does not run DocumentServer, upload documents to an Office backend, or require the former `office-editor.ziziyi.com` service.
+文档通过浏览器内存传入编辑器，使用 ONLYOFFICE Web Apps 与 x2t WebAssembly 在用户设备上处理。最终镜像不运行 DocumentServer，不向 Office 后端上传文档，也不再依赖 `office-editor.ziziyi.com`。
 
-## Security model
+## 隐私与安全
 
-- Editor scripts, fonts, workers, and WebAssembly are served from the same origin.
-- Third-party Office plugins and cloud-drive integrations are disabled.
-- A restrictive Content Security Policy blocks third-party network requests.
-- Builds fail if known former-operator or analytics domains remain in generated assets.
-- The Xinghuo integration uses a strict-origin `postMessage` bridge and transfers document data as `ArrayBuffer`.
+- 编辑器脚本、字体、Worker 和 WebAssembly 全部由同源服务器提供。
+- 已禁用第三方 Office 插件和网盘集成。
+- 严格的内容安全策略会阻止第三方网络请求。
+- 构建会扫描旧作者资源域名、统计服务域名等残留，发现后直接失败。
+- 星火通过限定来源的 `postMessage` 桥接，并以 `ArrayBuffer` 传输文档。
 
-## Build
+## 构建镜像
 
-Requirements: Docker with access to the official images below.
+服务器需要安装 Docker，并能获取以下官方基础镜像：
 
 ```text
 onlyoffice/documentserver:9.4.0.1
@@ -22,7 +22,7 @@ node:22-alpine
 caddy:2-alpine
 ```
 
-Build the production image:
+构建：
 
 ```bash
 docker build \
@@ -32,9 +32,9 @@ docker build \
   .
 ```
 
-The ONLYOFFICE image is used only as a build-stage source for static resources. It is not running in the final container.
+ONLYOFFICE 镜像只在构建阶段用于提取静态资源，不会在最终容器中运行完整 DocumentServer。
 
-Run locally:
+启动：
 
 ```bash
 docker run -d \
@@ -44,9 +44,9 @@ docker run -d \
   xinghuo-office:9.4.0.1-3
 ```
 
-## 1Panel Compose
+## 1Panel 编排
 
-Clone this repository to `/opt/office-website`, build the image with the command above, then use:
+先将仓库克隆到 `/opt/office-website` 并执行上面的构建命令，然后使用：
 
 ```yaml
 services:
@@ -58,13 +58,13 @@ services:
       - "127.0.0.1:18080:80"
 ```
 
-Configure a 1Panel website reverse proxy to `http://127.0.0.1:18080` and enable HTTPS. A domain with HTTPS is strongly recommended; an HTTP IP endpoint will be blocked when embedded by an HTTPS Xinghuo web client.
+在 1Panel 网站中将自己的域名反向代理到 `http://127.0.0.1:18080`，并开启 HTTPS。正式环境强烈建议使用域名和 HTTPS；HTTPS 的星火网页版通常会阻止嵌入 HTTP IP 地址。
 
-## Development
+## 本地开发
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-The source and ONLYOFFICE Community components are distributed under AGPL-3.0-compatible terms. Preserve the corresponding notices and publish source changes when providing the modified application over a network.
+本项目及所使用的 ONLYOFFICE Community 组件采用 AGPL-3.0 兼容条款。通过网络提供修改后的应用时，请保留相应声明并公开对应源代码修改。
