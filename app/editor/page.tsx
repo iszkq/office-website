@@ -205,6 +205,7 @@ export default function Page() {
     let removeReadOnlySpreadsheetGuards: (() => void) | null = null;
     const renderedPreviewErrorTimers = new Set<number>();
     let passwordPromptReported = false;
+    let pendingDocumentPassword: string | undefined;
 
     const postBridgeMessage = (
       type: string,
@@ -425,7 +426,6 @@ export default function Page() {
     };
 
     const reportProtectedDocumentPrompt = () => {
-      if (!bridgeEnabled || passwordPromptReported) return;
       const iframeDoc = getEditorFrame()?.contentDocument;
       const passwordInput = iframeDoc?.querySelector<HTMLInputElement>(
         'input[type="password"]'
@@ -436,6 +436,29 @@ export default function Page() {
         '[role="dialog"], .asc-window'
       );
       if (!dialog) return;
+
+      if (pendingDocumentPassword) {
+        const valueSetter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          'value'
+        )?.set;
+        valueSetter?.call(passwordInput, pendingDocumentPassword);
+        passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
+        passwordInput.dispatchEvent(new Event('change', { bubbles: true }));
+        if (typeof passwordInput.form?.requestSubmit === 'function') {
+          passwordInput.form.requestSubmit();
+        } else {
+          passwordInput.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true })
+          );
+          passwordInput.dispatchEvent(
+            new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true })
+          );
+        }
+        pendingDocumentPassword = undefined;
+      }
+
+      if (!bridgeEnabled || passwordPromptReported) return;
 
       passwordPromptReported = true;
       postBridgeMessage(BRIDGE_PASSWORD_REQUIRED);
@@ -769,34 +792,37 @@ export default function Page() {
 
       postDiagnostic("onlyoffice_api_preload_start");
       editorApiPromise = new Promise<void>((resolve, reject) => {
-        let script = document.querySelector<HTMLScriptElement>(
-          `script[src="${apiUrl}"]`
-        );
-        if (!script) {
-          script = document.createElement("script");
-          script.src = apiUrl;
+        let attempt = 0;
+        const load = () => {
+          const retrySuffix = attempt > 0 ? `?officeRetry=${attempt}` : "";
+          const script = document.createElement("script");
+          script.src = `${apiUrl}${retrySuffix}`;
           script.async = true;
           script.fetchPriority = "high";
-        }
 
-        const handleLoad = () => {
-          if (!window.DocsAPI?.DocEditor) {
+          const retryOrReject = (error: unknown) => {
             script.remove();
+            if (attempt < 1) {
+              attempt += 1;
+              window.setTimeout(load, 350);
+              return;
+            }
             editorApiPromise = null;
-            reject(new Error("DocsAPI did not initialize after api.js loaded"));
-            return;
-          }
-          postDiagnostic("onlyoffice_api_preload_complete");
-          resolve();
+            reject(error);
+          };
+          const handleLoad = () => {
+            if (!window.DocsAPI?.DocEditor) {
+              retryOrReject(new Error("DocsAPI did not initialize after api.js loaded"));
+              return;
+            }
+            postDiagnostic("onlyoffice_api_preload_complete");
+            resolve();
+          };
+          script.addEventListener("load", handleLoad, { once: true });
+          script.addEventListener("error", retryOrReject, { once: true });
+          document.head.appendChild(script);
         };
-        const handleError = (event: Event | string) => {
-          script.remove();
-          editorApiPromise = null;
-          reject(event);
-        };
-        script.addEventListener("load", handleLoad, { once: true });
-        script.addEventListener("error", handleError, { once: true });
-        if (!script.isConnected) document.head.appendChild(script);
+        load();
       });
       return editorApiPromise;
     };
@@ -861,7 +887,9 @@ export default function Page() {
       }
 
       if (event.data.type === BRIDGE_OPEN) {
-        const { buffer, fileName, fileType, mimeType } = event.data;
+        const { buffer, fileName, fileType, mimeType, password } = event.data;
+        pendingDocumentPassword =
+          typeof password === 'string' && password.trim() ? password : undefined;
         if (!(buffer instanceof ArrayBuffer) || typeof fileName !== "string") {
           postBridgeMessage(BRIDGE_ERROR, { message: "Invalid document data" });
           return;
@@ -884,8 +912,10 @@ export default function Page() {
       }
 
       if (event.data.type === BRIDGE_SOURCE_BEGIN) {
-        const { fileName, fileType, mimeType, byteLength, chunkCount } =
+        const { fileName, fileType, mimeType, byteLength, chunkCount, password } =
           event.data;
+        pendingDocumentPassword =
+          typeof password === 'string' && password.trim() ? password : undefined;
         const requestedChunkSize = event.data.chunkSize;
         if (
           typeof fileName !== "string" ||

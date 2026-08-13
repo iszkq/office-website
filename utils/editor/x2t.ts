@@ -26,10 +26,9 @@ export class X2tConverter {
   private pendingMessages = new Map<number, PendingMessage>();
 
   constructor() {
-    // Auto-initialize worker on construction
-    if (globalThis.Worker) {
-      this.init();
-    }
+    // The worker is initialized lazily by convert(). PDF previews do not use
+    // x2t at all, and eagerly creating it makes Android WebViews load a large
+    // worker chunk before the OnlyOffice editor is ready.
   }
 
   /**

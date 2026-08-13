@@ -90,6 +90,11 @@ test("mobile previews stay responsive while Community Edition editing uses the d
   assert.match(editorSource, /non-fatal mobile spreadsheet preview error/);
   assert.match(editorSource, /Failed to initialize the document editor/);
   assert.match(editorSource, /Failed to load the document editor assets/);
+  assert.match(editorSource, /pendingDocumentPassword/);
+  assert.match(editorSource, /passwordInput\.form\.requestSubmit/);
+  assert.match(editorSource, /const \{ buffer, fileName, fileType, mimeType, password \}/);
+  assert.match(editorSource, /officeRetry=\$\{attempt\}/);
+  assert.match(editorSource, /if \(attempt < 1\)/);
   assert.match(editorSource, /compactToolbar,/);
   assert.match(editorSource, /window\.visualViewport\?\.height/);
   assert.match(editorSource, /--office-viewport-height/);
