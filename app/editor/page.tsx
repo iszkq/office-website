@@ -21,6 +21,7 @@ const BRIDGE_SOURCE_CHUNK_RECEIVED = "xinghuo-office-source-chunk-received";
 const BRIDGE_SOURCE_END = "xinghuo-office-source-end";
 const BRIDGE_SOURCE_RECEIVED = "xinghuo-office-source-received";
 const BRIDGE_OPENED = "xinghuo-office-opened";
+const BRIDGE_PASSWORD_REQUIRED = "xinghuo-office-password-required";
 const BRIDGE_DIRTY = "xinghuo-office-dirty";
 const BRIDGE_SAVE = "xinghuo-office-save";
 const BRIDGE_SAVING = "xinghuo-office-saving";
@@ -203,6 +204,7 @@ export default function Page() {
     let renderedPreviewErrorObserver: MutationObserver | null = null;
     let removeReadOnlySpreadsheetGuards: (() => void) | null = null;
     const renderedPreviewErrorTimers = new Set<number>();
+    let passwordPromptReported = false;
 
     const postBridgeMessage = (
       type: string,
@@ -422,6 +424,23 @@ export default function Page() {
       };
     };
 
+    const reportProtectedDocumentPrompt = () => {
+      if (!bridgeEnabled || passwordPromptReported) return;
+      const iframeDoc = getEditorFrame()?.contentDocument;
+      const passwordInput = iframeDoc?.querySelector<HTMLInputElement>(
+        'input[type="password"]'
+      );
+      if (!passwordInput) return;
+
+      const dialog = passwordInput.closest<HTMLElement>(
+        '[role="dialog"], .asc-window'
+      );
+      if (!dialog) return;
+
+      passwordPromptReported = true;
+      postBridgeMessage(BRIDGE_PASSWORD_REQUIRED);
+    };
+
     const commitPendingSpreadsheetEdit = () => {
       if (
         getDocumentType(server.getDocument().fileType) !== DocumentType.Cell
@@ -539,6 +558,7 @@ export default function Page() {
       renderedPreviewErrorObserver?.disconnect();
       renderedPreviewErrorObserver = new MutationObserver(() => {
         scheduleRenderedPreviewErrorDismissal();
+        window.setTimeout(reportProtectedDocumentPrompt, 0);
       });
       renderedPreviewErrorObserver.observe(iframeDoc.body, {
         childList: true,
@@ -577,6 +597,7 @@ export default function Page() {
           );
         },
       });
+      window.setTimeout(reportProtectedDocumentPrompt, 0);
 
       // const script = iframeDoc.createElement("script");
       // script.src = apiUrl;

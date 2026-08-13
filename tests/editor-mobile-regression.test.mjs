@@ -31,6 +31,9 @@ test("mobile previews stay responsive while Community Edition editing uses the d
   );
   assert.match(editorSource, /BRIDGE_SOURCE_RECEIVED/);
   assert.match(editorSource, /postBridgeMessage\(BRIDGE_SOURCE_RECEIVED\)/);
+  assert.match(editorSource, /BRIDGE_PASSWORD_REQUIRED = "xinghuo-office-password-required"/);
+  assert.match(editorSource, /input\[type="password"\]/);
+  assert.match(editorSource, /postBridgeMessage\(BRIDGE_PASSWORD_REQUIRED\)/);
   assert.match(editorSource, /BRIDGE_SOURCE_BEGIN/);
   assert.match(editorSource, /BRIDGE_SOURCE_CHUNK_RECEIVED/);
   assert.match(editorSource, /decodeBase64Chunk/);
