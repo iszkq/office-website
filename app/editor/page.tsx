@@ -1120,10 +1120,13 @@ export default function Page() {
     <>
       <div>
         <div
-          className="w-screen overflow-hidden"
-          style={{ height: "var(--office-viewport-height, 100dvh)" }}
+          className="w-screen h-full min-h-0 overflow-hidden"
+          style={{
+            height: "var(--office-viewport-height, 100dvh)",
+            minHeight: "var(--office-viewport-height, 100dvh)",
+          }}
         >
-          <div id="placeholder">
+          <div id="placeholder" className="h-full min-h-0 w-full">
             <iframe
               className="w-0 h-0 hidden"
               src={APP_ROOT + PRELOAD_HTML}
