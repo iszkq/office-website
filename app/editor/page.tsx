@@ -167,6 +167,7 @@ export default function Page() {
     const paramLang = searchParams.get("lang");
     const paramTheme = searchParams.get("theme");
     const requestedMobileMode = searchParams.get("mobile");
+    const protectedPdf = searchParams.get("protectedPdf") === "1";
     const mobileMode =
       requestedMobileMode === null
         ? window.matchMedia(
@@ -760,7 +761,15 @@ export default function Page() {
         // ONLYOFFICE Community Edition intentionally disables editing in its
         // mobile Web editor. Keep the responsive mobile reader for previews,
         // but use the fully editable desktop engine for mobile edit sessions.
-        type: mobileMode && !editing ? "mobile" : "desktop",
+          // Protected PDFs are opened with the same desktop engine used by
+          // Web/Windows.  The mobile reader can stall before document-ready
+          // when OnlyOffice must decrypt a PDF inside a WebView.  Ordinary
+          // (unprotected) PDFs and all other mobile previews keep the
+          // responsive mobile engine.
+          type:
+            mobileMode && !editing && !protectedPdf
+              ? "mobile"
+              : "desktop",
         width: "100%",
         height: "100%",
       });

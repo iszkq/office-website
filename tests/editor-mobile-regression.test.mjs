@@ -18,8 +18,9 @@ test("mobile previews stay responsive while Community Edition editing uses the d
   assert.match(editorSource, /requestedMobileMode === "1"/);
   assert.match(
     editorSource,
-    /type: mobileMode && !editing \? "mobile" : "desktop"/
+    /const protectedPdf = searchParams\.get\("protectedPdf"\) === "1"/
   );
+  assert.match(editorSource, /mobileMode && !editing && !protectedPdf/);
   assert.match(
     editorSource,
     /mode: editing && doc\.fileType !== "pdf" \? "edit" : "view"/
