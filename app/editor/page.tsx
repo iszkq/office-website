@@ -207,6 +207,7 @@ export default function Page() {
     const renderedPreviewErrorTimers = new Set<number>();
     let passwordPromptReported = false;
     let pendingDocumentPassword: string | undefined;
+    let embeddedPdfEncrypted = false;
 
     const postBridgeMessage = (
       type: string,
@@ -767,7 +768,7 @@ export default function Page() {
           // (unprotected) PDFs and all other mobile previews keep the
           // responsive mobile engine.
           type:
-            mobileMode && !editing && !protectedPdf
+            mobileMode && !editing && !(protectedPdf || embeddedPdfEncrypted)
               ? "mobile"
               : "desktop",
         width: "100%",
@@ -863,6 +864,10 @@ export default function Page() {
       mimeType: string
     ) => {
       postBridgeMessage(BRIDGE_SOURCE_RECEIVED);
+      if (fileType?.toLowerCase() === "pdf") {
+        embeddedPdfEncrypted = new TextDecoder("latin1").decode(buffer).includes("/Encrypt");
+        if (embeddedPdfEncrypted) postDiagnostic("protected_pdf_detected", "info");
+      }
       postDiagnostic("document_conversion_start", "info", {
         byteLength: buffer.byteLength,
         fileType: fileType || "unknown",
