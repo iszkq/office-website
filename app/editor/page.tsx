@@ -12,6 +12,7 @@ import io, { MockSocket } from "@/utils/editor/socket";
 import { createFetchProxy } from "@/utils/editor/fetch";
 import { createXHRProxy } from "@/utils/editor/xhr";
 import { DocEditor, DocumentType } from "@/utils/editor/types";
+import EffectStage from "@/components/effects/effect-stage";
 
 const BRIDGE_READY = "xinghuo-office-ready";
 const BRIDGE_OPEN = "xinghuo-office-open";
@@ -1139,6 +1140,7 @@ export default function Page() {
           </div>
         </div>
       </div>
+      <EffectStage />
     </>
   );
 }
